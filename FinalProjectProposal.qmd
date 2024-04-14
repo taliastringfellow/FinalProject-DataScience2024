@@ -1,0 +1,25 @@
+---
+title: "Final Project Proposal"
+author: "Asad Azhar, Juan Menendez, Priscila Stisman, Talia Stringfellow" 
+date: "April 15, 2024"
+execute:
+  warning: false
+format:
+  pdf:
+    toc: false
+    number-sections: false
+    colorlinks: true
+---
+
+## Final project Proposal
+
+*Instructions: The proposal should be 2-3 paragraphs and include the names on the team, a brief description of the motivating question, all data sources that will be used, a description of the approach, and the two or three of the biggest anticipated technical hurdles in the project.*
+
+## Motivating Question
+
+## Data Sources 
+
+## Description of the approach 
+
+## Expected Technical Hurdles 
+
