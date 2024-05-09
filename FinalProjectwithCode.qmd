@@ -16,6 +16,7 @@ library(tidyverse)
 library(tidymodels)
 library(recipes)
 library(ggplot2)
+library(ggrepel)
 library(patchwork)
 library(tidyclust)
 library(dplyr)
@@ -39,6 +40,16 @@ library(parsnip)
 library(workflows)
 library(tune)
 library(yardstick)
+
+library(rgeoboundaries)
+library(readxl)
+library(scales)
+
+
+library(geobr)
+library(spData)
+library(ggrepel)
+library(colorspace)
 ```
 
 # Read in Data
@@ -94,7 +105,7 @@ pais : country (numeric)
 
 ```{r}
 
-Workingdata <- lat_am_pop_2023 %>% select(colorr, colori, etid, ocup4a, formal, cp13, cp8, r4a, smedia1n, q1tc_r, q2, q12cn, q10inc, edre, pais, ur, q14motan)
+Workingdata <- lat_am_pop_2023 %>% select(colorr, colori, etid, ocup4a, formal, cp13, cp8, r4a, smedia1n, q1tc_r, q2, q12cn, q10inc, edre, pais, ur, q14motan, prov)
 
 Workingdata <- Workingdata %>%
   mutate(ocup4a = case_when(
@@ -268,6 +279,285 @@ SouthAmerica_only <- SouthAmerica_only %>%
          political_involvement = cp13,
          community_involvement  =cp8, 
          country_num = pais)
+
+
+```
+
+## Exploritory Data Analysis 
+
+## Geospatial data upload 
+```{r}
+
+data("world")
+
+sa_all_mapping <- world %>%
+  filter(continent == "South America") 
+
+#need to take out countries that are not in the other datasets: Falkland Islands, Venezuela, Guyana, French Guiana 
+sa_mapping <- sa_all_mapping %>%
+  filter(name_long != "Falkland Islands" & name_long != "Venezuela" & name_long != "Guyana")
+
+#province level data for each country 
+geoboundaries <- gb_adm1() %>%
+  filter(shapeGroup %in% c("ARG", "COL", "BRA", "URY", "CHL", "VEN", "PRY", "PER", "ECU", "SUR", "GUY", "GUF", "BOL")) 
+
+
+#Argentina province level data
+arg <- gb_adm1("ARG")
+
+#mapping argentina 
+plot(st_geometry(arg),
+     col = rgb(red = 1, green = 0, blue = 0, alpha = 0.5),
+     axes = TRUE, graticule = TRUE)
+
+#exploring other geospatial data on south america 
+library(remotes)
+remotes::install_github("wmgeolab/rgeoboundaries")
+library(rgeoboundaries)
+
+#Pulling Argentina specific data 
+Argentina <- geoboundaries(
+     country = "Argentina",
+     adm_lvl = "adm1",
+     type = "simplified") 
+Argentina <- geoboundaries(
+     country = "Argentina",
+     adm_lvl = "adm1",
+     type = "simplified") 
+ 
+
+#mapping south america by population 
+pop_geom <- sa_all_mapping %>%
+  ggplot() +
+  geom_sf(aes(fill=pop/10^6)) +
+  geom_sf_text(aes(label = name_long),
+    size = 3,
+    color = "black") + 
+  scale_fill_continuous_sequential(palette= "Heat 2")+
+    labs(title = "Population by Country\n in Millions of Inhabitants", fill= "Pop. in millions")+
+  theme_void()
+
+
+#mapping South America by Life Expectancy 
+le_geom <- sa_all_mapping %>%
+  ggplot()+
+  geom_sf(aes(fill = lifeExp), color = "white", size = 0.1) +
+  geom_sf_text(aes(label = round(lifeExp),2),
+    size = 3.5,
+    color = "black") +
+  scale_fill_continuous_sequential(palette= "Heat 2")+
+  labs(title = "Average Life Expenctancy by Country", fill = "Life Expectancy") +
+  theme_void()
+
+
+#side by side:
+pop_geom + le_geom 
+
+
+```
+
+
+```{r}
+#Investigating age distributions by country visually 
+SouthAmerica_only %>%
+  ggplot(aes(age, fill = country_name)) +
+  geom_bar() +
+  facet_wrap(~country_name, scales = "free") +
+  labs(fill = "Country Name", title = "Age distribution of Data by Country") +
+  theme_minimal()
+```
+
+
+```{r}
+#seeing how much of our data set has considered emigrating for educational attainment purposes (very low at less than 1%)
+summarise(SouthAmerica_only, mean(leave4educ))
+
+#creating table that counts the ethnicity breakout by country 
+countryxeth_tbl <- SouthAmerica_only %>%
+  group_by(country_name, ethnicity) %>%
+  count(ethnicity) %>%
+  pivot_wider(names_from = ethnicity, values_from = n) %>%
+  ungroup()
+
+countryleveldf <- as.data.frame(countryxeth_tbl)
+
+countryleveldf
+
+#replacing missing values with zero
+countryleveldf <- within(countryleveldf, {
+  `2` <- replace(`2`, is.na(`2`), 0)
+  `3` <- replace(`3`, is.na(`3`), 0)
+  `4` <- replace(`4`, is.na(`4`), 0)
+})
+
+#create a total column 
+countryleveldf$total_pop <- rowSums(countryleveldf[, c('1', '2', '3', '4', '5', '7', 'NA')])
+```
+
+
+```{r}
+#create a proportions ethnicity df out of the raw data 
+eth_proportions_df <- countryleveldf %>%
+  group_by(country_name) %>%
+  mutate("1" = `1` / total_pop *100,
+         "2"= `2` / total_pop *100,
+         "3" = `3` / total_pop *100,
+         "4" = `4` / total_pop *100,
+         "5"= `5` / total_pop *100,
+         "7" = `7` / total_pop *100,
+         "NA" = `NA` / total_pop *100) %>%
+  ungroup()
+
+eth_proportions_df
+#data not showing 3 countries: Venezuela, Guyana, French Guiana
+
+#Pivoting the ethnicity proportions longer so that I can interpret with bargraphs 
+eth_prop_df_long <-eth_proportions_df %>%
+  select(-total_pop) %>%
+  pivot_longer(!country_name, names_to = "score", values_to = "percent")
+
+#creating a bar graph with the ethnicity proportions 
+eth_prop_df_long %>%
+  mutate(score = factor(score, labels = c("Category 1", "Category 2", "Category 3", "Category 4", "Category 5", "Category 7", "No Data"))) %>%
+  ggplot(aes(x = country_name, y= percent, fill = score))+
+  geom_bar(position="fill", stat="identity") + 
+  labs(title = "Ethnicity Category as Proportion by Country", caption = "From Representative sample from LAPOP in 2023") +
+  theme_minimal()
+
+```
+
+
+```{r}
+#creating table that counts the education breakout by country 
+countryxeduc_tbl <- SouthAmerica_only %>%
+  group_by(country_name, educ_attainment) %>%
+  count(educ_attainment) %>%
+  pivot_wider(names_from = educ_attainment, values_from = n) %>%
+  ungroup()
+
+countryxeduc_tbl
+
+#replacing missing values with zero
+countryxeduc_tbl <- within(countryxeduc_tbl, {
+  `NA` <- replace(`NA`, is.na(`NA`), 0)
+})
+
+#creating a total without NA column
+countryxeduc_tbl$total_pop_noNA <- rowSums(countryxeduc_tbl[, c('0', '1', '2', '3', '4', '5', '6')])
+
+#create a total column with NA
+countryxeduc_tbl$total_pop_withNA <- rowSums(countryxeduc_tbl[, c('0', '1', '2', '3', '4', '5', '6', 'NA')])
+
+countryxeduc_tbl
+
+#create a proportions ethnicity df out of the raw data 
+educ_proportions_df <- countryxeduc_tbl %>%
+  group_by(country_name) %>%
+  mutate("0" = `0` / total_pop_withNA *100,
+         "1" = `1` / total_pop_withNA *100,
+         "2"= `2` / total_pop_withNA *100,
+         "3" = `3` / total_pop_withNA *100,
+         "4" = `4` / total_pop_withNA *100,
+         "5"= `5` / total_pop_withNA *100,
+         "6" = `6` / total_pop_withNA *100,
+         "NA" = `NA` / total_pop_withNA *100) %>%
+  ungroup()
+
+educ_proportions_df
+#data not showing 3 countries: Venezuela, Guyana, French Guiana
+
+#prepping education proportions df for graphing 
+educ_prop_df_long <-educ_proportions_df %>%
+  select(-total_pop_noNA, -total_pop_withNA) 
+  
+#Pivoting the ethnicity proportions longer so that I can interpret with bargraphs 
+educ_prop_df_long <-educ_prop_df_long %>%
+  pivot_longer(!country_name, names_to = "educ_score", values_to = "percent")
+
+#creating a bar graph with the ethnicity proportions 
+educ_prop_df_long %>%
+  ggplot(aes(x = country_name, y= percent, fill = educ_score))+
+  geom_bar(position="fill", stat="identity") + 
+  labs(title = "Ethnicity Category as Proportion by Country", caption = "From Representative sample from LAPOP in 2023") +
+  theme_minimal()
+
+
+```
+
+
+```{r}
+#finding mean educational outcome by country
+countryxeduc_tbl <- countryxeduc_tbl %>%
+  group_by(country_name) %>%
+  mutate(mean_education = (0*`0` + 1*`1` + 2*`2` + 3*`3`+ 4*`4` + 5*`5` + 6*`6`)/total_pop_noNA) 
+
+#adding mean education outcome to our geospatial data (sa_mapping)
+#ONLY RUN THIS CODE ONCE! 
+sa_mapping <- sa_mapping %>%
+  left_join(countryxeduc_tbl, by = c("name_long" = "country_name")) %>%
+  select(-matches("\\d+"), -`NA`)
+
+#renameing total pop because it's the survey population not the real population! 
+sa_mapping <- sa_mapping %>%
+  rename(survey_total_noNA = total_pop_noNA) %>%
+  rename(survey_total_withNA = total_pop_withNA)
+
+#Visualizing the Mean population outcomes 
+#mapping South America by mean educational outcome 
+educ_geom <-sa_mapping %>%
+  ggplot()+
+  geom_sf(aes(fill = mean_education), color = "white", size = 0.1) +
+  geom_sf_text(aes(label = round((mean_education),2)),
+    size = 3,
+    color = "black") +
+  scale_fill_gradient(name = "Avg. Educ\non scale of \n0 to 6", 
+                      low = "#C0D8FD", high = "#0F6CFC") +
+  labs(title = "Average Educational Outcome \nin South America", subtitle = "using representative data", caption = "Education is categorized based on an increasing \neducational achievement. Variables are coded as follows:\nNone = 0,\nPrimary School Incomplete = 1\nPrimary School Complete = 2\nHigh-school Incomplete = 3\nHigh-school Complete = 4\nTertiary/University Incomplete = 5\nTertiary/University Complete = 6\n findings from representative survey data 'LAPOP' 2023") +
+  theme_void() +
+  theme(plot.caption = element_text(hjust = 1, size =7))
+
+#mapping South America by GDP per Capita 
+gdp_geom <- sa_mapping %>%
+  ggplot()+
+  geom_sf(aes(fill = gdpPercap), color = "white", size = 0.1) +
+  scale_fill_gradient(name = "gdpPercap", 
+                      low = "#C0D8FD", high = "#0F6CFC",
+                      labels = scales::dollar)+
+  labs(title = "GDP per Capita \nin South America") +
+  theme_void() 
+
+#side by side:
+educ_geom + gdp_geom 
+
+```
+
+```{r}
+#creating table that counts education breakout by ethnicity 
+educxeth_tbl <- SouthAmerica_only %>%
+  group_by(ethnicity, educ_attainment) %>%
+  count(educ_attainment) %>%
+  pivot_wider(names_from = ethnicity, values_from = n) %>%
+  ungroup()
+
+educxeth_tbl
+
+#making data factors:
+SouthAmerica_only <- SouthAmerica_only %>%
+  mutate_at(vars(-age, -income), as.factor)
+
+```
+
+
+## Splitting the data 
+```{r}
+#setting seed 
+set.seed(20201020)
+
+# create a split object
+data_splitting <- initial_split(data = SouthAmerica_only, prop = 0.75)
+# create the training and testing data
+data_train <- training(x = data_splitting)
+data_test <- testing(x = data_splitting)
 
 ```
 
