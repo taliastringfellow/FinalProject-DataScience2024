@@ -1,0 +1,274 @@
+---
+title: "Data Science for Public Policy"
+subtitle: "Final Project"
+author: "Asad Azhar, Juan Menendez, Priscila Stisman, Talia Stringfellow"
+execute:
+  warning: false
+format:
+  html:
+    embed-resources: true
+---
+## Final Project Studying Latin America
+
+# Packages
+```{r}
+library(tidyverse)
+library(tidymodels)
+library(recipes)
+library(ggplot2)
+library(patchwork)
+library(tidyclust)
+library(dplyr)
+library(themis)
+library(haven)
+library(rpart)
+library(lubridate)
+library(archive)
+library(utils)
+library(tigris)
+library(sf)
+library(geodata)
+library(rnaturalearth)
+library(mapview)
+library(textrecipes) 
+library(vip)
+
+library(rsample)
+library(recipes)
+library(parsnip)
+library(workflows)
+library(tune)
+library(yardstick)
+```
+
+# Read in Data
+
+```{r}
+lat_am_pop_2023 <- read_dta("data/Merge_2023_LAPOP_AmericasBarometer_v1.0_w.dta")
+
+```
+
+## Data cleaning
+
+In this section, we identify and clean our variables of intrest
+
+Variables of interest:
+
+[**Etnicity/ skin color identification**]{.underline}
+
+Colorr: contains individual skintone on a scale form 0 to 11 (categorical)
+
+Colori: interviewer skincolor
+
+Etid: self perceived ethnicity (categorical)
+
+[**Employment Status**]{.underline}
+
+Ocup4a: employment status (dummy)
+
+formal: formal job (dummy)
+
+[**Social Capital**]{.underline} 
+
+cp13: political party meetings attendance (frequency of attendance, categorical)
+
+cp8: community meetings attendance (frequency of attendance, categorical)
+
+r4a: has a mobile phone (dummy)
+
+smedia1n: has social media (dummy)
+
+[**Demographic Data**]{.underline}
+
+q1tc_r: sex (make dummy)
+
+q2: age (continuous)
+
+q12cn: number of members in the household
+
+q10inc: income (Argentine pesos, categorical) (for Argentina)
+
+Edre: education attainment (all levels)
+
+pais : country (numeric)
+
+```{r}
+
+Workingdata <- lat_am_pop_2023 %>% select(colorr, colori, etid, ocup4a, formal, cp13, cp8, r4a, smedia1n, q1tc_r, q2, q12cn, q10inc, edre, pais, ur, q14motan)
+
+Workingdata <- Workingdata %>%
+  mutate(ocup4a = case_when(
+    ocup4a == 1 ~ 1,
+    ocup4a == 2 ~ 0,
+    ocup4a == 3 ~ 0,
+    ocup4a == 4 ~ 0,
+    ocup4a == 5 ~ 0,
+    ocup4a == 6 ~ 0,
+    ocup4a == 7 ~ 0,
+  ))
+
+Workingdata <- Workingdata %>%
+  mutate(cp13 = case_when(
+    cp13 == 4 ~ 1,
+    cp13 == 3 ~ 2,
+    cp13 == 2 ~ 3,
+    cp13 == 1 ~ 4,
+  ))
+
+Workingdata <- Workingdata %>%
+  mutate(cp8 = case_when(
+    cp8 == 4 ~ 1,
+    cp8 == 3 ~ 2,
+    cp8 == 2 ~ 3,
+    cp8 == 1 ~ 4,
+  ))
+
+Workingdata <- Workingdata %>%
+  mutate(q1tc_r = case_when(
+    q1tc_r == 1 ~ 1,
+    q1tc_r == 2 ~ 0,
+    cp8 == 3 ~ 1,
+  ))
+
+#cleaning ethnicity 
+Workingdata <- Workingdata %>%
+  mutate(etid = case_when(
+    etid == 1 ~ 1, 
+    etid == 2 ~ 2, 
+    etid == 3 ~ 3, 
+    etid == 4 ~ 4, 
+    etid == 5 ~ 5, 
+    etid == 6 ~ 6, 
+    etid == 7 ~ 7, 
+    etid == 1506 ~ NA,
+    etid == 1106 ~ NA,
+    etid == 1110 ~ NA, 
+    TRUE ~ NA
+  ))
+
+# create dummy variable for college
+Workingdata <- Workingdata %>%
+  mutate(university = case_when(
+    edre == 6 ~ 1,
+    edre == 5 ~ 1,
+    !(edre %in% c(5, 6)) ~ 0,
+    TRUE ~ NA
+  ))
+
+Workingdata <- Workingdata %>%
+  mutate(university_factor = factor(case_when(
+    edre == 6 ~ "University",
+    edre == 5 ~ "University", 
+    !(edre %in% c(5, 6)) ~ "Non-University", 
+    TRUE ~ NA_character_ 
+  )))
+
+skincolor <- c("#fff5f6", "#f5e2dc", "#e9c1b7", "#e7c9a5", "#c0a280", "#9d7c53", "#85674f", "#70503b", "#523c2f", "#422811", "#383127")
+
+skincodes <- c(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11)
+skincolorpalette <- tibble(skincodes, skincolor)
+
+educ_labels <- c(
+  "None" = 0,
+  "Primary School Incomplete" = 1,
+  "Primary School Complete" = 2,
+  "High-school Incomplete" = 3,
+  "High-school Complete" = 4,
+  "Tertiary/University Incomplete" = 5,
+  "Tertiary/University Complete" = 6
+)
+
+
+#cleaning Income 
+income_codes <- c(1701, 1702, 1703, 1704, 1705, 1706, 1707, 1708, 1709, 1710, 1711, 1712, 1713, 1714, 1715)
+
+# Labels
+income_labels <- c("Entre $0 y $14.000 pesos", "Entre $14.001 y $26.000 pesos", "Entre $26.001 y $39.000 pesos",
+            "Entre $39.001 y $47.000 pesos", "Entre $47.001 y $55.000 pesos", "Entre $55.001 y $61.000 pesos",
+            "Entre $61.001 y $68.000 pesos", "Entre $68.001 y $81.000 pesos", "Entre $81.001 y $88.000 pesos",
+            "Entre $88.001 y $97.000 pesos", "Entre $97.001 y $115.000 pesos", "Entre $115.001 y $136.000 pesos",
+            "Entre $136.001 y $168.000 pesos", "Entre $168.001 y $221.000 pesos", "Más de $221.000 pesos")
+
+# Assign labels
+income_values <- factor(income_codes, levels = income_codes, labels = income_labels)
+
+#creating dummy for stating Lack of educational opportunities as reason for why they have considered emigrating 
+Workingdata <- Workingdata %>%
+  mutate(leave4educ = case_when(
+    q14motan == 3 ~ 1,
+    !(q14motan %in% 3) ~ 0,
+    TRUE ~ NA
+  ))
+
+#Adding country labels 
+Workingdata <- Workingdata %>% 
+  filter(pais < 39) %>% #getting rid of US and Canada from dataset 
+  mutate(country_name = factor(case_when(
+    pais == 1 ~ "Mexico",
+    pais == 2 ~ "Guatemala", 
+    pais == 3 ~ "El Salvador",
+    pais == 4 ~ "Honduras", 
+    pais == 5 ~ "Nicaragua",
+    pais == 6 ~ "Costa Rica", 
+    pais == 7 ~ "Panama",
+    pais == 8 ~ "Colombia", 
+    pais == 9 ~ "Ecuador",
+    pais == 10 ~ "Bolivia", 
+    pais == 11 ~ "Peru", 
+    pais == 12 ~ "Paraguay",
+    pais == 13 ~ "Chile", 
+    pais == 14 ~ "Uruguay",
+    pais == 15 ~ "Brazil", 
+    pais == 16 ~ "Venezuela",
+    pais == 17 ~ "Argentina", 
+    pais == 21 ~ "Dominican Republic", 
+    pais == 22 ~ "Haiti", 
+    pais == 23 ~ "Jamaica",
+    pais == 24 ~ "Guyana", 
+    pais == 25 ~ "Trinidad & Tobago",     
+    pais == 26 ~ "Belize",
+    pais == 27 ~ "Suriname", 
+    pais == 28 ~ "Bahamas", 
+    pais == 29 ~ "Barbados",
+    pais == 30 ~ "Grenada", 
+    pais == 31 ~ "Saint Lucia", 
+    pais == 32 ~ "Dominica", 
+    pais == 33 ~ "Antigua and Barbuda", 
+    pais == 34 ~ "Saint Vincent and the Grenadines", 
+    pais == 35 ~ "Saint Kitts and Nevis",
+    TRUE ~ NA_character_ 
+  ))) %>%
+  relocate(country_name, .after = pais) 
+
+SouthAmerica_only <- Workingdata %>% 
+  filter(country_name == "Argentina" 
+         | country_name == "Uruguay" 
+         | country_name == "Chile" 
+         | country_name == "Paraguay" 
+         | country_name == "Bolivia" 
+         | country_name == "Peru" 
+         | country_name == "Ecuador" 
+         | country_name == "Brazil" 
+         | country_name == "Suriname" 
+         | country_name == "Guyana" 
+         | country_name == "French Guiana"  
+         | country_name == "Venezuela" 
+         | country_name == "Colombia")
+
+SouthAmerica_only <- SouthAmerica_only %>%
+  rename(skin_color = colorr,
+         ethnicity = etid,
+         employed = ocup4a,
+         mobile = r4a, 
+         social_media = smedia1n,
+         gender = q1tc_r,
+         age = q2, 
+         income = q10inc,
+         educ_attainment = edre,
+         political_involvement = cp13,
+         community_involvement  =cp8, 
+         country_num = pais)
+
+```
+
+
