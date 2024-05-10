@@ -4,9 +4,26 @@ format: html
 editor: visual
 ---
 
-## Citations 
+## 1. Background and Literature Review
 
+## 2. Data Sources
 
+#### **⁠Americas Barometer** - LAPOP/ Vanderbilt University
 
-#for the geospatial data from rgeoboundaries 
+The Americas Barometer is a periodic survey study of 34 countries in the Western Hemisphere, with stratified nationally representative samples drawn in each country, a common questionnaire core, and country-specific modules. It is the only scientifically rigorous comparative survey of democratic values and behaviors that covers all independent countries in North, Central, and South America, as well as a significant number of countries in the Caribbean. The Americas Barometer measures attitudes, evaluations, experiences, and behavior in the Americas using national probability samples of voting-age adults. This dataset contains all our variables of interest
+
+The AmericasBarometer by the LAPOP Lab, www.vanderbilt.edu/lapop
+
+### **Rgeoboundaries** - Runfola et al, 2020
+
+For the geospatial analysis, we use data from rgeoboundaries. It contains political administrative boundaries for the globe as they were by 2020. Since South America hasn not experienced boundaries changes in 21st century, we use the dataset as it is, just adjusting the scope to the subcontinent. 
+
 Runfola D, Anderson A, Baier H, Crittenden M, Dowker E, Fuhrig S, et al. (2020) geoBoundaries: A global database of political administrative boundaries. PLoS ONE 15(4): e0231866. https://doi.org/10.1371/journal.pone.0231866
+
+## 3. Data Wrangling
+
+## 4. Exploratory Analisis: higher education in South America
+
+## 5. Data Analysis: using unsupervised machine learning to predict attending to college in Argentina
+
+## 6. Discussion of Results
