@@ -1,0 +1,510 @@
+---
+title: "FPModels"
+format: pdf
+editor: visual
+---
+## Final Project Studying Latin America
+
+# Packages
+```{r}
+library(tidyverse)
+library(tidymodels)
+library(recipes)
+library(ggplot2)
+library(ggrepel)
+library(patchwork)
+library(tidyclust)
+library(dplyr)
+library(themis)
+library(haven)
+library(rpart)
+library(lubridate)
+library(archive)
+library(utils)
+library(tigris)
+library(sf)
+library(geodata)
+library(rnaturalearth)
+library(mapview)
+library(textrecipes) 
+library(vip)
+library(here)
+library(glmnet)
+library(ranger)
+library(rsample)
+library(parsnip)
+library(workflows)
+library(tune)
+library(yardstick)
+library(rgeoboundaries)
+library(readxl)
+library(scales)
+library(geobr)
+library(spData)
+library(colorspace)
+```
+
+# Read in Data
+
+```{r}
+lat_am_pop_2023 <- read_dta("Merge_2023_LAPOP_AmericasBarometer_v1.0_w.dta")
+
+```
+
+## Data cleaning
+
+In this section, we identify and clean our variables of interest
+
+Variables of interest:
+
+[**Etnicity/ skin color identification**]{.underline}
+
+Colorr: contains individual skintone on a scale form 0 to 11 (categorical)
+
+Colori: interviewer skincolor
+
+Etid: self perceived ethnicity (categorical)
+
+[**Employment Status**]{.underline}
+
+Ocup4a: employment status (dummy)
+
+formal: formal job (dummy)
+
+[**Social Capital**]{.underline} 
+
+cp13: political party meetings attendance (frequency of attendance, categorical)
+
+cp8: community meetings attendance (frequency of attendance, categorical)
+
+r4a: has a mobile phone (dummy)
+
+smedia1n: has social media (dummy)
+
+[**Demographic Data**]{.underline}
+
+q1tc_r: sex (make dummy)
+
+q2: age (continuous)
+
+q12cn: number of members in the household
+
+q10inc: income (Argentine pesos, categorical) (for Argentina)
+
+Edre: education attainment (all levels)
+
+pais : country (numeric)
+
+```{r}
+
+Workingdata <- lat_am_pop_2023 %>% select(colorr, colori, etid, ocup4a, formal, cp13, cp8, r4a, smedia1n, q1tc_r, q2, q12cn, q10inc, edre, pais, ur, q14motan, prov)
+
+#creating dummy for work status where 1 is working and zero is not working 
+Workingdata <- Workingdata %>%
+  mutate(ocup4a = case_when(
+    ocup4a == 1 ~ 1,
+    ocup4a == 2 ~ 0,
+    ocup4a == 3 ~ 0,
+    ocup4a == 4 ~ 0,
+    ocup4a == 5 ~ 0,
+    ocup4a == 6 ~ 0,
+    ocup4a == 7 ~ 0,
+  ))
+
+#cleaning formal vs informal work 
+Workingdata <- Workingdata %>%
+  mutate(formal = case_when(
+    formal == 1 ~ 1,
+    formal == 2 ~ 0
+  ))
+
+#cleaning uses social media indicator variable
+Workingdata <- Workingdata %>%
+  mutate(smedia1n = case_when(
+    smedia1n == 1 ~ 1,
+    smedia1n == 2 ~ 0
+  ))
+
+
+#cleaning political involvement to be least to most 
+Workingdata <- Workingdata %>%
+  mutate(cp13 = case_when(
+    cp13 == 4 ~ 1,
+    cp13 == 3 ~ 2,
+    cp13 == 2 ~ 3,
+    cp13 == 1 ~ 4,
+  ))
+
+#cleaning community involvement to be least to most 
+Workingdata <- Workingdata %>%
+  mutate(cp8 = case_when(
+    cp8 == 4 ~ 1,
+    cp8 == 3 ~ 2,
+    cp8 == 2 ~ 3,
+    cp8 == 1 ~ 4,
+  ))
+
+#cleaning urban indicator variable
+Workingdata <- Workingdata %>%
+  mutate(ur = case_when(
+    ur == 1 ~ 1,
+    ur == 2 ~ 0
+  ))
+
+#making gender indicator variable where 0 = female, 1 = male
+Workingdata <- Workingdata %>%
+  mutate(q1tc_r = case_when(
+    q1tc_r == 1 ~ 1,
+    q1tc_r == 2 ~ 0,
+    q1tc_r == 3 ~ NA,
+  ))
+
+#cleaning ethnicity (note there is no etid6, etid7 is "other" so we will convert all the additional races as "other" for simplicity)
+#making black the max instead of mulata
+
+Workingdata <- Workingdata %>%
+  mutate(etid = case_when(
+    etid == 1 ~ 1, 
+    etid == 2 ~ 2, 
+    etid == 3 ~ 3, 
+    etid == 5 ~ 4, 
+    etid == 4 ~ 5, 
+    etid > 200 ~ 7,
+    etid == 7 ~ 7, 
+    TRUE ~ NA
+  ))
+
+#creating labels for ethnicity 
+ethnicity_labels <- c(
+  "White" = 1,
+  "Mestizo" = 2,
+  "Indigenous" = 3,
+   "Mulata" = 4, #note that this was orignially coded as 5 and Black as 4, they have been switched 
+   "Black" = 5,
+  "Other" = 7
+)
+
+#creating ethnicity codes 
+ethnicity_codes <- c(1, 2, 3, 4, 5, 7)
+
+#creating skin color palette
+skincolor <- c("#fff5f6", "#f5e2dc", "#e9c1b7", "#e7c9a5", "#c0a280", "#9d7c53", "#85674f", "#70503b", "#523c2f", "#422811", "#383127")
+
+
+#creating skin codes 
+skincodes <- c(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11)
+
+#creating a tibble of the color pallet and skin coding 
+skincolorpalette <- tibble(skincodes, skincolor)
+
+
+# create indicator variable for getting to university (includes partial and completion of university)
+Workingdata <- Workingdata %>%
+  mutate(university = case_when(
+    edre == 6 ~ 1,
+    edre == 5 ~ 1,
+    !(edre %in% c(5, 6)) ~ 0,
+    TRUE ~ NA
+  ))
+
+#creating a factor variable for getting into university  
+Workingdata <- Workingdata %>%
+  mutate(university_factor = factor(case_when(
+    edre == 6 ~ "University",
+    edre == 5 ~ "University", 
+    !(edre %in% c(5, 6)) ~ "Non-University", 
+    TRUE ~ NA_character_ 
+  )))
+
+#creating labels for education 
+educ_labels <- c(
+  "None" = 0,
+  "Primary School Incomplete" = 1,
+  "Primary School Complete" = 2,
+  "High-school Incomplete" = 3,
+  "High-school Complete" = 4,
+  "Tertiary/University Incomplete" = 5,
+  "Tertiary/University Complete" = 6
+)
+
+#cleaning Income for ARGENTINA ONLY 
+arg_income_codes <- c(1701, 1702, 1703, 1704, 1705, 1706, 1707, 1708, 1709, 1710, 1711, 1712, 1713, 1714, 1715)
+
+# Labels for ARGENITNA INCOME 
+arg_income_labels <- c("Between $0 and $14.000 pesos", "Between $14.001 and $26.000 pesos", "Between $26.001 and $39.000 pesos",
+            "Between $39.001 and $47.000 pesos", "Between $47.001 and $55.000 pesos", "Between $55.001 and $61.000 pesos",
+            "Between $61.001 and $68.000 pesos", "Between $68.001 and $81.000 pesos", "Between $81.001 and $88.000 pesos",
+            "Between $88.001 and $97.000 pesos", "Between $97.001 and $115.000 pesos", "Between $115.001 and $136.000 pesos",
+            "Between $136.001 and $168.000 pesos", "Between $168.001 and $221.000 pesos", "More than $221.000 pesos")
+
+# Assign labels FOR ARGENTINA INCOME 
+arg_income_values <- factor(arg_income_codes, levels = arg_income_codes, labels = arg_income_labels)
+
+#creating indicator variable for stating "Lack of educational opportunities" as reason for why they have considered emigrating 
+Workingdata <- Workingdata %>%
+  mutate(leave4educ = case_when(
+    q14motan == 3 ~ 1,
+    !(q14motan %in% 3) ~ 0,
+    TRUE ~ NA
+  ))
+
+#Adding country labels 
+Workingdata <- Workingdata %>% 
+  filter(pais < 39) %>% #getting rid of US and Canada from dataset 
+  mutate(country_name = factor(case_when(
+    pais == 1 ~ "Mexico",
+    pais == 2 ~ "Guatemala", 
+    pais == 3 ~ "El Salvador",
+    pais == 4 ~ "Honduras", 
+    pais == 5 ~ "Nicaragua",
+    pais == 6 ~ "Costa Rica", 
+    pais == 7 ~ "Panama",
+    pais == 8 ~ "Colombia", 
+    pais == 9 ~ "Ecuador",
+    pais == 10 ~ "Bolivia", 
+    pais == 11 ~ "Peru", 
+    pais == 12 ~ "Paraguay",
+    pais == 13 ~ "Chile", 
+    pais == 14 ~ "Uruguay",
+    pais == 15 ~ "Brazil", 
+    pais == 16 ~ "Venezuela",
+    pais == 17 ~ "Argentina", 
+    pais == 21 ~ "Dominican Republic", 
+    pais == 22 ~ "Haiti", 
+    pais == 23 ~ "Jamaica",
+    pais == 24 ~ "Guyana", 
+    pais == 25 ~ "Trinidad & Tobago",     
+    pais == 26 ~ "Belize",
+    pais == 27 ~ "Suriname", 
+    pais == 28 ~ "Bahamas", 
+    pais == 29 ~ "Barbados",
+    pais == 30 ~ "Grenada", 
+    pais == 31 ~ "Saint Lucia", 
+    pais == 32 ~ "Dominica", 
+    pais == 33 ~ "Antigua and Barbuda", 
+    pais == 34 ~ "Saint Vincent and the Grenadines", 
+    pais == 35 ~ "Saint Kitts and Nevis",
+    TRUE ~ NA_character_ 
+  ))) %>%
+  relocate(country_name, .after = pais) 
+
+Workingdata <- Workingdata %>%
+  rename(skin_color = colorr,
+         ethnicity = etid,
+         employed = ocup4a,
+         mobile = r4a, 
+         social_media = smedia1n,
+         male = q1tc_r,
+         age = q2, 
+         income = q10inc,
+         educ_attainment = edre,
+         political_involvement = cp13,
+         community_involvement  =cp8, 
+         country_num = pais)
+
+
+SouthAmerica_only <- Workingdata %>% 
+  filter(country_name == "Argentina" 
+         | country_name == "Uruguay" 
+         | country_name == "Chile" 
+         | country_name == "Paraguay" 
+         | country_name == "Bolivia" 
+         | country_name == "Peru" 
+         | country_name == "Ecuador" 
+         | country_name == "Brazil" 
+         | country_name == "Suriname" 
+         | country_name == "Guyana" 
+         | country_name == "French Guiana"  
+         | country_name == "Venezuela" 
+         | country_name == "Colombia")
+
+```
+
+## Exploratory Data Analysis 
+
+## Geospatial data upload 
+```{r}
+
+data("world")
+
+sa_all_mapping <- world %>%
+  filter(continent == "South America") 
+
+#need to take out countries that are not in the other datasets: Falkland Islands, Venezuela, Guyana, French Guiana 
+sa_mapping <- sa_all_mapping %>%
+  filter(name_long != "Falkland Islands" & name_long != "Venezuela" & name_long != "Guyana")
+
+#province level data for each country 
+geoboundaries <- gb_adm1() %>%
+  filter(shapeGroup %in% c("ARG", "COL", "BRA", "URY", "CHL", "VEN", "PRY", "PER", "ECU", "SUR", "GUY", "GUF", "BOL")) 
+
+
+#Argentina province level data
+arg <- gb_adm1("ARG")
+
+#mapping argentina 
+plot(st_geometry(arg),
+     col = rgb(red = 1, green = 0, blue = 0, alpha = 0.5),
+     axes = TRUE, graticule = TRUE)
+
+#exploring other geospatial data on south america 
+library(remotes)
+remotes::install_github("wmgeolab/rgeoboundaries")
+library(rgeoboundaries)
+
+#Pulling Argentina specific data 
+Argentina <- geoboundaries(
+     country = "Argentina",
+     adm_lvl = "adm1",
+     type = "simplified") 
+Argentina <- geoboundaries(
+     country = "Argentina",
+     adm_lvl = "adm1",
+     type = "simplified") 
+ 
+
+#mapping south america by population 
+pop_geom <- sa_all_mapping %>%
+  ggplot() +
+  geom_sf(aes(fill=pop/10^6), color = "brown", size = 0.1) +
+  ggrepel::geom_label_repel(aes(label = name_long, geometry = geom),
+    stat = "sf_coordinates",
+    min.segment.length = 0,
+    size = 3,
+    color = "black") + 
+  scale_fill_continuous_sequential(palette= "Heat 2")+
+    labs(title = "Population by Country\nin Millions of Inhabitants", fill= "Pop.\n(in millions)")+
+  theme_void() +
+    theme(legend.title=element_text(size=9), 
+          plot.title = element_text(face = "bold", hjust = 0.5),
+          plot.title.position = "plot")
+
+
+#mapping South America by Life Expectancy 
+le_geom <- sa_all_mapping %>%
+  ggplot()+
+  geom_sf(aes(fill = lifeExp), color = "brown", size = 0.1) +
+  ggrepel::geom_label_repel(aes(label = round(lifeExp),2, geometry = geom),
+    stat = "sf_coordinates",
+    min.segment.length = 0,
+    size = 3,
+    color = "black") + 
+  scale_fill_continuous_sequential(palette= "Heat 2")+
+  labs(title = "Average Life Expenctancy by Country", fill = "Life Expectancy\n(in years)") +
+  theme_void() +
+    theme(legend.title=element_text(size=9),
+          plot.title = element_text(face = "bold", hjust = 0.5),
+          plot.text = element_text(face = "bold"),
+          plot.title.position = "plot")
+
+#side by side:
+pop_geom + le_geom 
+```
+
+## 5. Data Analysis: using supervised machine learning to predict attending to university in Argentina
+
+In this section, we focus on understanding the determinants of achieving university education in Argentina. A key feature of the Argentine superior education system is that the country has a public university system funded by the federal government to be "free" for students. 
+
+```{r}
+Argentinadata <- Workingdata %>% filter(country_num==17) #Choosing Argentina
+
+Argentinadata <- Argentinadata %>% select(skin_color, colori, ethnicity, employed, formal, political_involvement, community_involvement, mobile, social_media, male, age, q12cn, income, educ_attainment)
+
+#Splitting the data
+set.seed(20201020)
+# create a split object
+educ_split <- initial_split(data = Argentinadata, prop = 0.75)
+# create the training and testing data
+workingdata_train <- training(x = educ_split)
+workingdata_test <- testing(x = educ_split)
+```
+
+## Come up with Models & Estimation
+
+Building a **probit classigifation model** to quantify likelihood of making it to college based on our pre-defined predictors:
+
+```{r}
+# Create a recipe
+probit_recipe <- recipe(formula = university_factor ~ ., data = workingdata_train) %>%
+    step_normalize(all_numeric_predictors()) %>%
+    step_nzv(all_numeric_predictors())
+             
+# Set Probit Model
+probit_model <- logistic_reg() %>%
+  set_engine("glm", family = binomial(link = "probit"))
+
+# Probit Workflow and recipe
+probit_wf <- workflow() %>%
+  add_model(probit_model) %>%
+  add_recipe(probit_recipe)
+
+
+# Set folds for cross-validation
+folds <- vfold_cv(data = workingdata_train, v = 10)
+
+# Fitting probit model using v-fold resampling method
+probit_fit_rs <- probit_wf %>%
+  fit_resamples(
+    resamples = folds,
+    control = control_resamples(save_pred = TRUE, save_workflow = TRUE),
+    metrics = metric_set(accuracy, precision, recall)
+  )
+```
+
+Building a **decision tree** to quantify likelihood of making it to college based on our pre-defined predictors:
+
+```{r}
+# Create the recipe object 
+tree_recipe <- recipe(formula = university_factor ~ ., data = workingdata_train) %>%
+  step_normalize(all_numeric_predictors()) %>%
+  step_nzv(all_numeric_predictors()) %>%
+  step_impute_median(all_numeric_predictors()) %>%
+  step_impute_mode(all_nominal_predictors()) 
+
+# Create a cart model object
+lapop_tree <- 
+  decision_tree() %>%
+  set_engine("rpart", model = TRUE) %>%
+  set_mode("classification")
+
+# Create a workflow
+tree_wf <- workflow() %>%
+  add_recipe(tree_recipe) %>%
+  add_model(lapop_tree) 
+
+# Define the parameter grid
+param_grid <- expand.grid(
+  min_n = c(2, 5, 10, 15),   # Different values for the minimum number of observations in a node
+  maxdepth = c(3, 5, 7, 10)  # Different values for the maximum tree depth
+)
+
+# Tune the model
+tree_tune <- tree_wf %>%
+  tune_grid(
+    resamples = folds,
+    grid = param_grid,
+    control = control_grid(verbose = TRUE),
+    metrics = metric_set(accuracy, precision, recall)
+  )
+
+# Extract the best tuning parameters
+best_params <- tree_tune %>%
+  select_best(metric = "accuracy")
+
+# Create a new tree model with the best parameters
+best_tree_model <- lapop_tree %>%
+  set_engine("rpart", model = TRUE) %>%
+  set_mode("classification") %>%
+  finalize_model(best_params)
+
+# Fit the tuned model
+best_tree_fit <- best_tree_model %>%
+  fit(data = workingdata_train, formula = university_factor ~ .)
+
+# create a tree
+rpart.plot::rpart.plot(x = best_tree_fit$fit)
+
+```
+
+
+```{r}
