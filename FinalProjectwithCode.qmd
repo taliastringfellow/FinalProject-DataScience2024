@@ -52,6 +52,7 @@ library(geobr)
 library(spData)
 library(ggrepel)
 library(colorspace)
+library(paletteer)
 ```
 
 # Read in Data
@@ -119,6 +120,24 @@ Workingdata <- Workingdata %>%
     ocup4a == 5 ~ 0,
     ocup4a == 6 ~ 0,
     ocup4a == 7 ~ 0,
+    TRUE ~ NA
+  ))
+
+#cleaning skin color (self identified) 
+Workingdata <- Workingdata %>%
+  mutate(colorr = case_when(
+    colorr == 1 ~ 1,
+    colorr == 2 ~ 2,
+    colorr == 3 ~ 3,
+    colorr == 4 ~ 4,
+    colorr == 5 ~ 5,
+    colorr == 6 ~ 6,
+    colorr == 7 ~ 7, 
+    colorr == 8 ~ 8,
+    colorr == 9 ~ 9,
+    colorr == 10 ~ 10,
+    colorr == 11 ~ 11, 
+    colorr == 97 ~ NA, 
     TRUE ~ NA
   ))
 
@@ -203,17 +222,6 @@ ethnicity_labels <- c(
 
 #creating ethnicity codes 
 ethnicity_codes <- c(1, 2, 3, 4, 5, 7)
-
-#creating skin color palette
-skincolor <- c("#fff5f6", "#f5e2dc", "#e9c1b7", "#e7c9a5", "#c0a280", "#9d7c53", "#85674f", "#70503b", "#523c2f", "#422811", "#383127")
-
-
-#creating skin codes 
-skincodes <- c(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11)
-
-#creating a tibble of the color pallet and skin coding 
-skincolorpalette <- tibble(skincodes, skincolor)
-
 
 # create indicator variable for getting to university (includes partial and completion of university)
 Workingdata <- Workingdata %>%
@@ -458,7 +466,7 @@ SouthAmerica_only %>%
           plot.title = element_text(face = "bold", hjust = 0.5),
           plot.title.position = "plot")
 ```
-Based on this survey data, we observe that most South America countries have young populations. Uruguay stands out as a country with a somewhat evenly distributed age distribution and with the most elderly people surveyed. Colombia also stands out because they have a large middle-aged population.  
+Based on this survey data, we observe that most South American countries have relatively young population pyramids, with a demographic dividend estimated break even around 2035. Uruguay stands out as a country with a somewhat evenly distributed age distribution and with the most elderly people surveyed.
 
 ```{r}
 #seeing how much of our data set has considered emigrating for educational attainment purposes (very low at less than 1%)
@@ -535,15 +543,15 @@ eth_prop_df_long %>%
   ggplot(aes(x = country_name, y = percent, fill = eth_lab)) +
   geom_bar(position = position_fill(reverse = TRUE), stat = "identity") +
   labs(title = "Ethnicity Category as Proportion by Country", caption = "From Representative sample from LAPOP in 2023", y = "Percent", x = "Country", fill = "Ethnicity") +
-  scale_fill_hue(c = 40) +
+  scale_fill_brewer(palette = "BrBG", na.value = "orange")+ 
   theme_minimal() +
   theme(legend.title=element_text(face = "bold"),
         plot.title = element_text(face = "bold", hjust = 0.5),
         plot.caption = element_text(face = "italic", hjust = 0.5),
         plot.title.position = "plot")
 
-#use scales - categoralical varaible - fill manual and set colors with pallette 
-#scale_fill_manuel (vector with categories, colors with hex codes)
+#use scales - categorical variable - fill manual and set colors with palette 
+#scale_fill_manual (vector with categories, colors with hex codes)
 
 ```
 
@@ -598,10 +606,15 @@ educ_prop_df_long <-educ_prop_df_long %>%
 #creating a bar graph with the ethnicity proportions 
 educ_prop_df_long %>%
   ggplot(aes(x = country_name, y= percent, fill = educ_score))+
-  geom_bar(position="fill", stat="identity") + 
-  labs(title = "Ethnicity Category as Proportion by Country", caption = "From Representative sample from LAPOP in 2023") +
-  theme_minimal()
-
+  geom_bar(position = position_fill(reverse = TRUE), stat="identity") + 
+  labs(title = "Educational Outcome Distribution", caption = "From Representative sample from LAPOP in 2023", 
+       fill = "Educ level\n(categorical)", y = "Percent", x = "Country") +
+    scale_fill_brewer(palette = "YlGr")+ 
+  theme_minimal() +
+  theme(legend.title=element_text(face = "bold"),
+        plot.title = element_text(face = "bold", hjust = 0.5),
+        plot.caption = element_text(face = "italic", hjust = 0.5),
+        plot.title.position = "plot") 
 
 ```
 
@@ -668,6 +681,18 @@ SouthAmerica_only <- SouthAmerica_only %>%
 
 ```
 
+```{r}
+skincolor <- c("#fff5f6", "#f5e2dc", "#e9c1b7", "#e7c9a5", "#c0a280", "#9d7c53", "#85674f", "#70503b", "#523c2f", "#422811", "#383127")
+skincodes <- c(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11)
+skincolorpalette <- tibble(skincodes, skincolor)
+
+ggplot(SouthAmerica_only, aes(x = factor(skin_color))) +
+  geom_bar(aes(fill = factor(skin_color))) +  # Fill mapped to colorr
+  scale_fill_manual(values = skincolor) +
+  labs(title = "Self-reported skin color", x = "Skin color (from lighter to darker)", y = "Individuals in the sample", fill="Color")+
+  theme_minimal()
+
+```
 
 ## Splitting the data 
 ```{r}
