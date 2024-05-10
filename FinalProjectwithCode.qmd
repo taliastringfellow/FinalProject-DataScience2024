@@ -107,7 +107,7 @@ pais : country (numeric)
 
 ```{r}
 
-Workingdata <- lat_am_pop_2023 %>% select(colorr, colori, etid, ocup4a, formal, cp13, cp8, r4a, smedia1n, q1tc_r, q2, q12cn, q10inc, edre, pais, ur, q14motan, prov)
+Workingdata <- lat_am_pop_2023 %>% select(colorr, colori, etid, ocup4a, formal, cp13, cp8, r4a, smedia1n, q1tc_r, q2, q12cn, q10inc, edre, pais, ur, q14, q14motan, prov)
 
 #creating dummy for work status where 1 is working and zero is not working 
 Workingdata <- Workingdata %>%
@@ -119,20 +119,23 @@ Workingdata <- Workingdata %>%
     ocup4a == 5 ~ 0,
     ocup4a == 6 ~ 0,
     ocup4a == 7 ~ 0,
+    TRUE ~ NA
   ))
 
 #cleaning formal vs informal work 
 Workingdata <- Workingdata %>%
   mutate(formal = case_when(
     formal == 1 ~ 1,
-    formal == 2 ~ 0
+    formal == 2 ~ 0,
+    TRUE ~ NA
   ))
 
 #cleaning uses social media indicator variable
 Workingdata <- Workingdata %>%
   mutate(smedia1n = case_when(
     smedia1n == 1 ~ 1,
-    smedia1n == 2 ~ 0
+    smedia1n == 2 ~ 0,
+    TRUE ~ NA
   ))
 
 
@@ -143,6 +146,7 @@ Workingdata <- Workingdata %>%
     cp13 == 3 ~ 2,
     cp13 == 2 ~ 3,
     cp13 == 1 ~ 4,
+    TRUE ~ NA
   ))
 
 #cleaning community involvement to be least to most 
@@ -152,13 +156,15 @@ Workingdata <- Workingdata %>%
     cp8 == 3 ~ 2,
     cp8 == 2 ~ 3,
     cp8 == 1 ~ 4,
+    TRUE ~ NA
   ))
 
 #cleaning urban indicator variable
 Workingdata <- Workingdata %>%
   mutate(ur = case_when(
     ur == 1 ~ 1,
-    ur == 2 ~ 0
+    ur == 2 ~ 0,
+    TRUE ~ NA
   ))
 
 #making gender indicator variable where 0 = female, 1 = male
@@ -191,7 +197,8 @@ ethnicity_labels <- c(
   "Indigenous" = 3,
    "Mulata" = 4, #note that this was orignially coded as 5 and Black as 4, they have been switched 
    "Black" = 5,
-  "Other" = 7
+  "Other" = 7, 
+  "No Data" = NA
 )
 
 #creating ethnicity codes 
@@ -238,6 +245,22 @@ educ_labels <- c(
   "Tertiary/University Complete" = 6
 )
 
+#cleaning q14 which asks about considering emigrating in the next 3 years
+Workingdata <- Workingdata %>%
+  mutate(q14 = case_when(
+    q14 == 1 ~ 1,
+    q14 == 2 ~ 0,
+    TRUE ~ NA,
+  ))
+
+#creating indicator variable for stating "Lack of educational opportunities" as reason for why they have considered emigrating 
+Workingdata <- Workingdata %>%
+  mutate(leave4educ = case_when(
+    q14motan == 3 ~ 1,
+    !(q14motan %in% 3) ~ 0,
+    TRUE ~ NA
+  ))
+
 #cleaning Income for ARGENTINA ONLY 
 arg_income_codes <- c(1701, 1702, 1703, 1704, 1705, 1706, 1707, 1708, 1709, 1710, 1711, 1712, 1713, 1714, 1715)
 
@@ -263,14 +286,6 @@ arg_income_values <- factor(arg_income_codes, levels = arg_income_codes, labels 
 
 # Assign labels FOR BRAZIL INCOME 
 #arg_income_values <- factor(income_codes, levels = income_codes, labels = income_labels)
-
-#creating indicator variable for stating "Lack of educational opportunities" as reason for why they have considered emigrating 
-Workingdata <- Workingdata %>%
-  mutate(leave4educ = case_when(
-    q14motan == 3 ~ 1,
-    !(q14motan %in% 3) ~ 0,
-    TRUE ~ NA
-  ))
 
 #Adding country labels 
 Workingdata <- Workingdata %>% 
@@ -441,15 +456,23 @@ SouthAmerica_only %>%
   theme_minimal() +
     theme(legend.title=element_text(size=9),
           plot.title = element_text(face = "bold", hjust = 0.5),
-          plot.text = element_text(face = "bold"),
           plot.title.position = "plot")
 ```
 Based on this survey data, we observe that most South America countries have young populations. Uruguay stands out as a country with a somewhat evenly distributed age distribution and with the most elderly people surveyed. Colombia also stands out because they have a large middle-aged population.  
 
 ```{r}
 #seeing how much of our data set has considered emigrating for educational attainment purposes (very low at less than 1%)
-summarise(SouthAmerica_only, mean(leave4educ))
 
+SouthAmerica_only %>%
+  filter(q14 == 1)%>%
+  summarise(mean(leave4educ))
+
+```
+
+Part of the survey was asking respondents "And what is the most important reason why you have thought about emigrating?" with the option of "Lack of educational opportunities". We observe that of the people that responded yes to wanting to emigrate in the next 3 years, only a very small portion (0.4%) of the surveyed population noted it as a cause for emigration. Leading us to believe that lack of educational opportunities within one's home country is not a main driver of educational access.  
+
+## Transforming Ethnicity Results of Survey to Country Level 
+```{r}
 #creating table that counts the ethnicity breakout by country 
 countryxeth_tbl <- SouthAmerica_only %>%
   group_by(country_name, ethnicity) %>%
@@ -457,25 +480,24 @@ countryxeth_tbl <- SouthAmerica_only %>%
   pivot_wider(names_from = ethnicity, values_from = n) %>%
   ungroup()
 
-countryleveldf <- as.data.frame(countryxeth_tbl)
-
-countryleveldf
+countrylevel_eth_df <- as.data.frame(countryxeth_tbl)
 
 #replacing missing values with zero
-countryleveldf <- within(countryleveldf, {
+countrylevel_eth_df <- within(countrylevel_eth_df, {
   `2` <- replace(`2`, is.na(`2`), 0)
   `3` <- replace(`3`, is.na(`3`), 0)
-  `4` <- replace(`4`, is.na(`4`), 0)
+  `5` <- replace(`5`, is.na(`5`), 0)
 })
 
 #create a total column 
-countryleveldf$total_pop <- rowSums(countryleveldf[, c('1', '2', '3', '4', '5', '7', 'NA')])
-```
+countrylevel_eth_df$total_pop <- rowSums(countrylevel_eth_df[, c('1', '2', '3', '4', '5', '7', 'NA')])
 
+countrylevel_eth_df
+```
 
 ```{r}
 #create a proportions ethnicity df out of the raw data 
-eth_proportions_df <- countryleveldf %>%
+eth_proportions_df <- countrylevel_eth_df %>%
   group_by(country_name) %>%
   mutate("1" = `1` / total_pop *100,
          "2"= `2` / total_pop *100,
@@ -492,15 +514,33 @@ eth_proportions_df
 #Pivoting the ethnicity proportions longer so that I can interpret with bargraphs 
 eth_prop_df_long <-eth_proportions_df %>%
   select(-total_pop) %>%
-  pivot_longer(!country_name, names_to = "score", values_to = "percent")
+  pivot_longer(!country_name, names_to = "ethnicity", values_to = "percent")
+
+#adding ethnicity labels to dataframe 
+eth_prop_df_long <- eth_prop_df_long %>%
+  mutate(eth_lab = case_when(
+    ethnicity == 1 ~ "White",
+    ethnicity == 2 ~ "Mestizo",
+    ethnicity == 3 ~ "Indigenous",
+    ethnicity == 4 ~ "Mulata",
+    ethnicity == 5 ~ "Black",
+    ethnicity == 7 ~ "Other",
+    is.na(ethnicity) ~ "No Data"
+  ))
+
+eth_prop_df_long 
 
 #creating a bar graph with the ethnicity proportions 
 eth_prop_df_long %>%
-  mutate(score = factor(score, labels = c("Category 1", "Category 2", "Category 3", "Category 4", "Category 5", "Category 7", "No Data"))) %>%
-  ggplot(aes(x = country_name, y= percent, fill = score))+
-  geom_bar(position="fill", stat="identity") + 
-  labs(title = "Ethnicity Category as Proportion by Country", caption = "From Representative sample from LAPOP in 2023") +
-  theme_minimal()
+  ggplot(aes(x = country_name, y = percent, fill = eth_lab)) +
+  geom_bar(position = position_fill(reverse = TRUE), stat = "identity") +
+  labs(title = "Ethnicity Category as Proportion by Country", caption = "From Representative sample from LAPOP in 2023", y = "Percent", x = "Country", fill = "Ethnicity") +
+  scale_fill_hue(c = 40) +
+  theme_minimal() +
+  theme(legend.title=element_text(face = "bold"),
+        plot.title = element_text(face = "bold", hjust = 0.5),
+        plot.caption = element_text(face = "italic", hjust = 0.5),
+        plot.title.position = "plot")
 
 #use scales - categoralical varaible - fill manual and set colors with pallette 
 #scale_fill_manuel (vector with categories, colors with hex codes)
