@@ -33,6 +33,10 @@ library(rnaturalearth)
 library(mapview)
 library(textrecipes) 
 library(vip)
+library(themis)
+library(here)
+library(glmnet)
+library(ranger)
 
 library(rsample)
 library(recipes)
@@ -44,7 +48,6 @@ library(yardstick)
 library(rgeoboundaries)
 library(readxl)
 library(scales)
-
 
 library(geobr)
 library(spData)
@@ -107,6 +110,7 @@ pais : country (numeric)
 
 Workingdata <- lat_am_pop_2023 %>% select(colorr, colori, etid, ocup4a, formal, cp13, cp8, r4a, smedia1n, q1tc_r, q2, q12cn, q10inc, edre, pais, ur, q14motan, prov)
 
+#creating dummy for work status where 1 is working and zero is not working 
 Workingdata <- Workingdata %>%
   mutate(ocup4a = case_when(
     ocup4a == 1 ~ 1,
@@ -118,6 +122,22 @@ Workingdata <- Workingdata %>%
     ocup4a == 7 ~ 0,
   ))
 
+#cleaning formal vs informal work 
+Workingdata <- Workingdata %>%
+  mutate(formal = case_when(
+    formal == 1 ~ 1,
+    formal == 2 ~ 0
+  ))
+
+#cleaning uses social media indicator variable
+Workingdata <- Workingdata %>%
+  mutate(smedia1n = case_when(
+    smedia1n == 1 ~ 1,
+    smedia1n == 2 ~ 0
+  ))
+
+
+#cleaning political involvement to be least to most 
 Workingdata <- Workingdata %>%
   mutate(cp13 = case_when(
     cp13 == 4 ~ 1,
@@ -126,6 +146,7 @@ Workingdata <- Workingdata %>%
     cp13 == 1 ~ 4,
   ))
 
+#cleaning community involvement to be least to most 
 Workingdata <- Workingdata %>%
   mutate(cp8 = case_when(
     cp8 == 4 ~ 1,
@@ -134,30 +155,61 @@ Workingdata <- Workingdata %>%
     cp8 == 1 ~ 4,
   ))
 
+#cleaning urban indicator variable
+Workingdata <- Workingdata %>%
+  mutate(ur = case_when(
+    ur == 1 ~ 1,
+    ur == 2 ~ 0
+  ))
+
+#making gender indicator variable where 0 = female, 1 = male
 Workingdata <- Workingdata %>%
   mutate(q1tc_r = case_when(
     q1tc_r == 1 ~ 1,
     q1tc_r == 2 ~ 0,
-    cp8 == 3 ~ 1,
+    q1tc_r == 3 ~ NA,
   ))
 
-#cleaning ethnicity 
+#cleaning ethnicity (note there is no etid6, etid7 is "other" so we will convert all the additional races as "other" for simplicity)
+#making black the max instead of mulata
+
 Workingdata <- Workingdata %>%
   mutate(etid = case_when(
     etid == 1 ~ 1, 
     etid == 2 ~ 2, 
     etid == 3 ~ 3, 
-    etid == 4 ~ 4, 
-    etid == 5 ~ 5, 
-    etid == 6 ~ 6, 
+    etid == 5 ~ 4, 
+    etid == 4 ~ 5, 
+    etid > 200 ~ 7,
     etid == 7 ~ 7, 
-    etid == 1506 ~ NA,
-    etid == 1106 ~ NA,
-    etid == 1110 ~ NA, 
     TRUE ~ NA
   ))
 
-# create dummy variable for college
+#creating labels for ethnicity 
+ethnicity_labels <- c(
+  "White" = 1,
+  "Mestizo" = 2,
+  "Indigenous" = 3,
+   "Mulata" = 4, #note that this was orignially coded as 5 and Black as 4, they have been switched 
+   "Black" = 5,
+  "Other" = 7
+)
+
+#creating ethnicity codes 
+ethnicity_codes <- c(1, 2, 3, 4, 5, 7)
+
+#creating skin color palette
+skincolor <- c("#fff5f6", "#f5e2dc", "#e9c1b7", "#e7c9a5", "#c0a280", "#9d7c53", "#85674f", "#70503b", "#523c2f", "#422811", "#383127")
+
+
+#creating skin codes 
+skincodes <- c(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11)
+
+#creating a tibble of the color pallet and skin coding 
+skincolorpalette <- tibble(skincodes, skincolor)
+
+
+# create indicator variable for getting to university (includes partial and completion of university)
 Workingdata <- Workingdata %>%
   mutate(university = case_when(
     edre == 6 ~ 1,
@@ -166,6 +218,7 @@ Workingdata <- Workingdata %>%
     TRUE ~ NA
   ))
 
+#creating a factor variable for getting into university  
 Workingdata <- Workingdata %>%
   mutate(university_factor = factor(case_when(
     edre == 6 ~ "University",
@@ -174,11 +227,8 @@ Workingdata <- Workingdata %>%
     TRUE ~ NA_character_ 
   )))
 
-skincolor <- c("#fff5f6", "#f5e2dc", "#e9c1b7", "#e7c9a5", "#c0a280", "#9d7c53", "#85674f", "#70503b", "#523c2f", "#422811", "#383127")
 
-skincodes <- c(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11)
-skincolorpalette <- tibble(skincodes, skincolor)
-
+#creating labels for education 
 educ_labels <- c(
   "None" = 0,
   "Primary School Incomplete" = 1,
@@ -189,21 +239,33 @@ educ_labels <- c(
   "Tertiary/University Complete" = 6
 )
 
+#cleaning Income for ARGENTINA ONLY 
+arg_income_codes <- c(1701, 1702, 1703, 1704, 1705, 1706, 1707, 1708, 1709, 1710, 1711, 1712, 1713, 1714, 1715)
 
-#cleaning Income 
-income_codes <- c(1701, 1702, 1703, 1704, 1705, 1706, 1707, 1708, 1709, 1710, 1711, 1712, 1713, 1714, 1715)
-
-# Labels
-income_labels <- c("Between $0 and $14.000 pesos", "Between $14.001 and $26.000 pesos", "Between $26.001 and $39.000 pesos",
+# Labels for ARGENITNA INCOME 
+arg_income_labels <- c("Between $0 and $14.000 pesos", "Between $14.001 and $26.000 pesos", "Between $26.001 and $39.000 pesos",
             "Between $39.001 and $47.000 pesos", "Between $47.001 and $55.000 pesos", "Between $55.001 and $61.000 pesos",
             "Between $61.001 and $68.000 pesos", "Between $68.001 and $81.000 pesos", "Between $81.001 and $88.000 pesos",
             "Between $88.001 and $97.000 pesos", "Between $97.001 and $115.000 pesos", "Between $115.001 and $136.000 pesos",
             "Between $136.001 and $168.000 pesos", "Between $168.001 and $221.000 pesos", "More than $221.000 pesos")
 
-# Assign labels
-income_values <- factor(income_codes, levels = income_codes, labels = income_labels)
+# Assign labels FOR ARGENTINA INCOME 
+arg_income_values <- factor(income_codes, levels = income_codes, labels = income_labels)
 
-#creating dummy for stating Lack of educational opportunities as reason for why they have considered emigrating 
+#cleaning Income for BRAZIL ONLY 
+#arg_income_codes <- c(1701, 1702, 1703, 1704, 1705, 1706, 1707, 1708, 1709, 1710, 1711, 1712, 1713, 1714, 1715)
+
+# Labels for BRAZIL INCOME 
+#arg_income_labels <- c("Between $0 and $14.000 pesos", "Between $14.001 and $26.000 pesos", "Between $26.001 and $39.000 pesos",
+           # "Between $39.001 and $47.000 pesos", "Between $47.001 and $55.000 pesos", "Between $55.001 and $61.000 pesos",
+         #   "Between $61.001 and $68.000 pesos", "Between $68.001 and $81.000 pesos", "Between $81.001 and $88.000 pesos",
+          #  "Between $88.001 and $97.000 pesos", "Between $97.001 and $115.000 pesos", "Between $115.001 and $136.000 pesos",
+          #  "Between $136.001 and $168.000 pesos", "Between $168.001 and $221.000 pesos", "More than $221.000 pesos")
+
+# Assign labels FOR BRAZIL INCOME 
+#arg_income_values <- factor(income_codes, levels = income_codes, labels = income_labels)
+
+#creating indicator variable for stating "Lack of educational opportunities" as reason for why they have considered emigrating 
 Workingdata <- Workingdata %>%
   mutate(leave4educ = case_when(
     q14motan == 3 ~ 1,
@@ -251,6 +313,21 @@ Workingdata <- Workingdata %>%
   ))) %>%
   relocate(country_name, .after = pais) 
 
+Workingdata <- Workingdata %>%
+  rename(skin_color = colorr,
+         ethnicity = etid,
+         employed = ocup4a,
+         mobile = r4a, 
+         social_media = smedia1n,
+         male = q1tc_r,
+         age = q2, 
+         income = q10inc,
+         educ_attainment = edre,
+         political_involvement = cp13,
+         community_involvement  =cp8, 
+         country_num = pais)
+
+
 SouthAmerica_only <- Workingdata %>% 
   filter(country_name == "Argentina" 
          | country_name == "Uruguay" 
@@ -265,20 +342,6 @@ SouthAmerica_only <- Workingdata %>%
          | country_name == "French Guiana"  
          | country_name == "Venezuela" 
          | country_name == "Colombia")
-
-SouthAmerica_only <- SouthAmerica_only %>%
-  rename(skin_color = colorr,
-         ethnicity = etid,
-         employed = ocup4a,
-         mobile = r4a, 
-         social_media = smedia1n,
-         gender = q1tc_r,
-         age = q2, 
-         income = q10inc,
-         educ_attainment = edre,
-         political_involvement = cp13,
-         community_involvement  =cp8, 
-         country_num = pais)
 
 
 ```
@@ -347,7 +410,9 @@ le_geom <- sa_all_mapping %>%
     color = "black") +
   scale_fill_continuous_sequential(palette= "Heat 2")+
   labs(title = "Average Life Expenctancy by Country", fill = "Life Expectancy") +
-  theme_void()
+  theme_void() +
+    theme(legend.title=element_text(size=4))
+
 
 
 #side by side:
@@ -423,6 +488,9 @@ eth_prop_df_long %>%
   geom_bar(position="fill", stat="identity") + 
   labs(title = "Ethnicity Category as Proportion by Country", caption = "From Representative sample from LAPOP in 2023") +
   theme_minimal()
+
+#use scales - categoralical varaible - fill manual and set colors with pallette 
+#scale_fill_manuel (vector with categories, colors with hex codes)
 
 ```
 
