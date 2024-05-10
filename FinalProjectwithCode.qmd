@@ -53,13 +53,13 @@ library(spData)
 library(ggrepel)
 library(colorspace)
 library(paletteer)
+library(RColorBrewer)
 ```
 
 # Read in Data
 
 ```{r}
-lat_am_pop_2023 <- read_dta("data/Merge_2023_LAPOP_AmericasBarometer_v1.0_w.dta")
-
+lat_am_pop_2023 <- read_dta("Merge_2023_LAPOP_AmericasBarometer_v1.0_w.dta")
 ```
 
 ## Data cleaning
@@ -240,18 +240,6 @@ Workingdata <- Workingdata %>%
     !(edre %in% c(5, 6)) ~ "Non-University", 
     TRUE ~ NA_character_ 
   )))
-
-
-#creating labels for education 
-educ_labels <- c(
-  "None" = 0,
-  "Primary School Incomplete" = 1,
-  "Primary School Complete" = 2,
-  "High-school Incomplete" = 3,
-  "High-school Complete" = 4,
-  "Tertiary/University Incomplete" = 5,
-  "Tertiary/University Complete" = 6
-)
 
 #cleaning q14 which asks about considering emigrating in the next 3 years
 Workingdata <- Workingdata %>%
@@ -539,7 +527,7 @@ eth_prop_df_long <- eth_prop_df_long %>%
 eth_prop_df_long 
 
 #creating a bar graph with the ethnicity proportions 
-eth_prop_df_long %>%
+eth_prop_bargraph <- eth_prop_df_long %>%
   ggplot(aes(x = country_name, y = percent, fill = eth_lab)) +
   geom_bar(position = position_fill(reverse = TRUE), stat = "identity") +
   labs(title = "Ethnicity Category as Proportion by Country", caption = "From Representative sample from LAPOP in 2023", y = "Percent", x = "Country", fill = "Ethnicity") +
@@ -598,24 +586,48 @@ educ_proportions_df
 #prepping education proportions df for graphing 
 educ_prop_df_long <-educ_proportions_df %>%
   select(-total_pop_noNA, -total_pop_withNA) 
-  
+
+educ_prop_df_long  
 #Pivoting the ethnicity proportions longer so that I can interpret with bargraphs 
 educ_prop_df_long <-educ_prop_df_long %>%
   pivot_longer(!country_name, names_to = "educ_score", values_to = "percent")
 
+#adding labels for education 
+educ_prop_df_long <- educ_prop_df_long %>%
+  mutate(educ_lab = case_when(
+    educ_score == 0 ~ "None",
+    educ_score == 1 ~ "Primary School Incomplete",
+    educ_score == 2 ~ "Primary School Complete",
+    educ_score == 3 ~ "High-school Incomplete",
+    educ_score == 4 ~ "High-school Complete",
+    educ_score == 5 ~ "Tertiary/University Incomplete",
+    educ_score == 6 ~ "Tertiary/University Complete",
+    is.na(educ_score) ~ "No Data"
+  ))
+  
+  
+  #educ_lab = factor(educ_lab, levels = c("None", "Primary School Incomplete", "Primary School Complete", "High-school Incomplete", "High-school Complete", "Tertiary/University Incomplete", "Tertiary/University Complete", "No Data")))
+
+educ_prop_df_long 
+
 #creating a bar graph with the ethnicity proportions 
-educ_prop_df_long %>%
-  ggplot(aes(x = country_name, y= percent, fill = educ_score))+
+educ_prop_bargraph <- educ_prop_df_long %>%
+  ggplot(aes(x = country_name, y= percent, fill = educ_score)) +
   geom_bar(position = position_fill(reverse = TRUE), stat="identity") + 
-  labs(title = "Educational Outcome Distribution", caption = "From Representative sample from LAPOP in 2023", 
+  labs(title = "Educational Outcome Distribution by Country", caption = "From Representative sample from LAPOP in 2023\n 'Pri Sch' means Primary School, 'HS' stands for High School,\n'Uni' stands for University, 'Inc' & 'Comp' stands for in/complete", 
        fill = "Educ level\n(categorical)", y = "Percent", x = "Country") +
-    scale_fill_brewer(palette = "YlGr")+ 
+  scale_fill_manual(labels = 
+                        c("None", "Pri Sch Inc.", "Pri Sch Comp.", 
+                          "HS Inc.", "HS Comp.", 
+                          "Uni Inc.", "Uni Comp.", "No Data"), values = c("#C2E6C7", "#9FD99E", "#7BC47F", "#4CAF50", "#388E3C", "#2E7D32", "#1B5E20", "#333333")) +
   theme_minimal() +
   theme(legend.title=element_text(face = "bold"),
         plot.title = element_text(face = "bold", hjust = 0.5),
         plot.caption = element_text(face = "italic", hjust = 0.5),
-        plot.title.position = "plot") 
+        plot.title.position = "plot")
 
+#putting the graphs on top of each other 
+(eth_prop_bargraph / educ_prop_bargraph) + plot_layout(nrow = 2, heights = c(1, 1))
 ```
 
 
