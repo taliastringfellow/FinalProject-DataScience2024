@@ -194,11 +194,11 @@ educ_labels <- c(
 income_codes <- c(1701, 1702, 1703, 1704, 1705, 1706, 1707, 1708, 1709, 1710, 1711, 1712, 1713, 1714, 1715)
 
 # Labels
-income_labels <- c("Entre $0 y $14.000 pesos", "Entre $14.001 y $26.000 pesos", "Entre $26.001 y $39.000 pesos",
-            "Entre $39.001 y $47.000 pesos", "Entre $47.001 y $55.000 pesos", "Entre $55.001 y $61.000 pesos",
-            "Entre $61.001 y $68.000 pesos", "Entre $68.001 y $81.000 pesos", "Entre $81.001 y $88.000 pesos",
-            "Entre $88.001 y $97.000 pesos", "Entre $97.001 y $115.000 pesos", "Entre $115.001 y $136.000 pesos",
-            "Entre $136.001 y $168.000 pesos", "Entre $168.001 y $221.000 pesos", "Más de $221.000 pesos")
+income_labels <- c("Between $0 and $14.000 pesos", "Between $14.001 and $26.000 pesos", "Between $26.001 and $39.000 pesos",
+            "Between $39.001 and $47.000 pesos", "Between $47.001 and $55.000 pesos", "Between $55.001 and $61.000 pesos",
+            "Between $61.001 and $68.000 pesos", "Between $68.001 and $81.000 pesos", "Between $81.001 and $88.000 pesos",
+            "Between $88.001 and $97.000 pesos", "Between $97.001 and $115.000 pesos", "Between $115.001 and $136.000 pesos",
+            "Between $136.001 and $168.000 pesos", "Between $168.001 and $221.000 pesos", "More than $221.000 pesos")
 
 # Assign labels
 income_values <- factor(income_codes, levels = income_codes, labels = income_labels)
@@ -563,6 +563,28 @@ data_test <- testing(x = data_splitting)
 
 #### PRISCILA HERE:
 
+```{r fig.height=10, fig.width=12}
+
+ggplot(data_train, aes(skin_color, fill = factor(educ_attainment, levels = 0:6))) +
+  geom_bar(position = "dodge") +
+    scale_x_discrete(labels = names(skincolor)) +
+  scale_fill_hue(labels = c("None",
+                             "Primary School Incomplete",
+                             "Primary School Complete",
+                             "High-school Incomplete",
+                             "High-school Complete",
+                             "Tertiary/University Incomplete",
+                             "Tertiary/University Complete")) +
+  facet_wrap(~ country_name, nrow = 2) +  # Create separate plots for each country
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+  labs(fill = "Education Attainment") +
+  ggtitle("Education Attainment by Skin Color and Country")
+
+# I think this graph is pretty intuitive of the situation. In the x-axis we measure whiter to darkers skin color, and it is clear for some countries that whiter color skin people have on average more high-school complete and tertiaria/university compared to darker counterparts. This is: blue and pink bars are mostly at the beginning of the x axis.
+
+```
+
+
 ```{r}
 #Build decision tree
 
@@ -725,7 +747,7 @@ lasso_tune <- tune_grid(
 best_model <- select_best(lasso_tune, metric = "rmse")
 
 # Finalize the best-tuned model obtained from tuning
-final_lasso_model <- tune::finalize_model(best_model) # THE MODEL STOPS WORKING HERE, TRIED MANY THINS. ASK ALENA.
+final_lasso_model <- tune::finalize_model(best_model) # THE MODEL STOPS WORKING HERE, TRIED MANY THINS. ASK ALENA please!!!
 
 # Fit the finalized model to the training data
 lasso_fit <- final_lasso_model %>%
