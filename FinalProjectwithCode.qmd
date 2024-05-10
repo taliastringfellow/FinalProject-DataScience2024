@@ -39,7 +39,6 @@ library(glmnet)
 library(ranger)
 
 library(rsample)
-library(recipes)
 library(parsnip)
 library(workflows)
 library(tune)
@@ -250,7 +249,7 @@ arg_income_labels <- c("Between $0 and $14.000 pesos", "Between $14.001 and $26.
             "Between $136.001 and $168.000 pesos", "Between $168.001 and $221.000 pesos", "More than $221.000 pesos")
 
 # Assign labels FOR ARGENTINA INCOME 
-arg_income_values <- factor(income_codes, levels = income_codes, labels = income_labels)
+arg_income_values <- factor(arg_income_codes, levels = arg_income_codes, labels = arg_income_labels)
 
 #cleaning Income for BRAZIL ONLY 
 #arg_income_codes <- c(1701, 1702, 1703, 1704, 1705, 1706, 1707, 1708, 1709, 1710, 1711, 1712, 1713, 1714, 1715)
@@ -343,7 +342,6 @@ SouthAmerica_only <- Workingdata %>%
          | country_name == "Venezuela" 
          | country_name == "Colombia")
 
-
 ```
 
 ## Exploritory Data Analysis 
@@ -392,28 +390,36 @@ Argentina <- geoboundaries(
 #mapping south america by population 
 pop_geom <- sa_all_mapping %>%
   ggplot() +
-  geom_sf(aes(fill=pop/10^6)) +
-  geom_sf_text(aes(label = name_long),
+  geom_sf(aes(fill=pop/10^6), color = "brown", size = 0.1) +
+  ggrepel::geom_label_repel(aes(label = name_long, geometry = geom),
+    stat = "sf_coordinates",
+    min.segment.length = 0,
     size = 3,
     color = "black") + 
   scale_fill_continuous_sequential(palette= "Heat 2")+
-    labs(title = "Population by Country\n in Millions of Inhabitants", fill= "Pop. in millions")+
-  theme_void()
+    labs(title = "Population by Country\nin Millions of Inhabitants", fill= "Pop.\n(in millions)")+
+  theme_void() +
+    theme(legend.title=element_text(size=9), 
+          plot.title = element_text(face = "bold", hjust = 0.5),
+          plot.title.position = "plot")
 
 
 #mapping South America by Life Expectancy 
 le_geom <- sa_all_mapping %>%
   ggplot()+
-  geom_sf(aes(fill = lifeExp), color = "white", size = 0.1) +
-  geom_sf_text(aes(label = round(lifeExp),2),
-    size = 3.5,
-    color = "black") +
+  geom_sf(aes(fill = lifeExp), color = "brown", size = 0.1) +
+  ggrepel::geom_label_repel(aes(label = round(lifeExp),2, geometry = geom),
+    stat = "sf_coordinates",
+    min.segment.length = 0,
+    size = 3,
+    color = "black") + 
   scale_fill_continuous_sequential(palette= "Heat 2")+
-  labs(title = "Average Life Expenctancy by Country", fill = "Life Expectancy") +
+  labs(title = "Average Life Expenctancy by Country", fill = "Life Expectancy\n(in years)") +
   theme_void() +
-    theme(legend.title=element_text(size=4))
-
-
+    theme(legend.title=element_text(size=9),
+          plot.title = element_text(face = "bold", hjust = 0.5),
+          plot.text = element_text(face = "bold"),
+          plot.title.position = "plot")
 
 #side by side:
 pop_geom + le_geom 
@@ -421,6 +427,9 @@ pop_geom + le_geom
 
 ```
 
+Here we are conducting some basic analysis of how South America maps given basic country level statistics. We see that Chile stands out with the highest life expectancy and somewhat smaller relative population. Brazil has the largest population by far with over 200 million people and has the median south American life expectancy of 75 years. 
+
+Please note this is not data from the LAPOP survey data, but rather best estimates of the true population size and life expectancy based on census / larger scale data from the geoboundaries Rpackage. 
 
 ```{r}
 #Investigating age distributions by country visually 
@@ -428,10 +437,14 @@ SouthAmerica_only %>%
   ggplot(aes(age, fill = country_name)) +
   geom_bar() +
   facet_wrap(~country_name, scales = "free") +
-  labs(fill = "Country Name", title = "Age distribution of Data by Country") +
-  theme_minimal()
+  labs(fill = "Country Name", title = "Age distribution of Data by Country", x = "Age (years)", y = "Count from Survey") +
+  theme_minimal() +
+    theme(legend.title=element_text(size=9),
+          plot.title = element_text(face = "bold", hjust = 0.5),
+          plot.text = element_text(face = "bold"),
+          plot.title.position = "plot")
 ```
-
+Based on this survey data, we observe that most South America countries have young populations. Uruguay stands out as a country with a somewhat evenly distributed age distribution and with the most elderly people surveyed. Colombia also stands out because they have a large middle-aged population.  
 
 ```{r}
 #seeing how much of our data set has considered emigrating for educational attainment purposes (very low at less than 1%)
