@@ -561,4 +561,191 @@ data_test <- testing(x = data_splitting)
 
 ```
 
+#### PRISCILA HERE:
 
+```{r}
+#Build decision tree
+
+# Create the recipe object 
+tree_recipe <- recipe(formula = university_factor ~ ., data = data_train) %>%
+  step_rm("educ_attainment", "university") %>%
+  step_normalize(all_numeric_predictors()) %>%
+  step_nzv(all_numeric_predictors()) %>%
+  step_impute_median(all_numeric_predictors()) %>%
+  step_impute_mode(all_nominal_predictors()) 
+
+# Create a cart model object
+  tree <- 
+  decision_tree() %>%
+  set_engine("rpart", model = TRUE) %>%
+  set_mode("classification")
+
+# Create a workflow
+tree_wf <- workflow() %>%
+  add_recipe(tree_recipe) %>%
+  add_model(tree) 
+
+# Define the parameter grid
+param_grid <- expand.grid(
+  min_n = c(2, 5, 10, 15),   # Different values for the minimum number of observations in a node
+  maxdepth = c(3, 5, 7, 10)  # Different values for the maximum tree depth
+)
+
+
+# Tune the model
+folds <- vfold_cv(data = data_train, v = 10)
+
+tree_tune <- tree_wf %>%
+  tune_grid(
+    resamples = folds,
+    grid = param_grid,
+    control = control_grid(verbose = TRUE),
+    metrics = metric_set(accuracy, precision, recall)
+  )
+
+# Extract the best tuning parameters
+best_params <- tree_tune %>%
+  select_best(metric = "accuracy")
+
+# Create a new tree model with the best parameters
+best_tree_model <- tree %>%
+  set_engine("rpart", model = TRUE) %>%
+  set_mode("classification") %>% 
+  finalize_model(best_params)
+
+# Fit the tuned model
+best_tree_fit <- best_tree_model %>%
+  fit(data = data_train, formula = university_factor ~ .)
+
+# create a tree
+rpart.plot::rpart.plot(x = best_tree_fit$fit)
+
+```
+
+
+Logistic Regression
+```{r}
+# Create a recipe
+logistic_recipe <- recipe(formula = university_factor ~ ., data = data_train) %>%
+    step_rm("educ_attainment", "university", "country_name") %>%
+    step_normalize(all_numeric_predictors()) %>%
+    step_nzv(all_numeric_predictors())
+             
+# Set Logistic Model
+logit_model <- logistic_reg() %>%
+  set_engine("glm", family = binomial(link = "logit"))
+
+# Logit workflow and recipe
+logistic_wf <- workflow() %>%
+  add_model(logit_model) %>%
+  add_recipe(logistic_recipe)
+
+
+# Set folds for cross-validation
+folds <- vfold_cv(data = data_train, v = 10)
+
+# Fitting Logit model using v-fold resampling method
+logistic_fit_rs <- logistic_wf %>%
+  fit_resamples(
+    resamples = folds,
+    control = control_resamples(save_pred = TRUE, save_workflow = TRUE),
+    metrics = metric_set(accuracy, precision, recall)
+  )
+```
+
+KNN
+```{r}
+#Build KNN Model
+
+knn_recipe <- recipe(formula = university_factor ~ ., data = data_train) %>%
+  step_rm("educ_attainment", "university", "country_name") %>%
+  step_normalize(all_numeric_predictors()) %>%
+  step_nzv(all_numeric_predictors()) %>%
+  step_impute_median(all_numeric_predictors())
+
+# create a knn model specification
+knn_mod <-
+  nearest_neighbor(neighbors = 5) %>%
+  set_engine(engine = "kknn") %>%
+  set_mode(mode = "classification")
+
+# create workflow
+
+knn_workflow <-
+  workflow() %>%
+  add_model(spec = knn_mod) %>%
+  add_recipe(recipe = knn_recipe)
+
+# fit resamples
+set.seed(456)
+
+knn_fit_rs <- knn_workflow %>%
+  fit_resamples(resamples = folds)
+
+#evaluate the model
+collect_metrics(knn_fit_rs)
+
+```
+
+
+Lasso
+```{r}
+data_train <- data_train %>%
+  mutate_at(vars(-university_factor, -country_name), as.numeric)
+
+# Create a recipe with mean imputation for missing values
+lasso_recipe <- recipe(formula = university ~ ., data = data_train) %>%
+    step_rm("educ_attainment", "university_factor", "country_name") %>%
+  step_impute_mean(all_predictors())
+
+# Set up the Lasso model specification
+lasso_spec <- linear_reg(penalty = tune(), mixture = 1) %>%
+  set_engine("glmnet")
+
+# Set the search grid for tuning
+lasso_grid <- grid_regular(penalty(range = c(0.01, 1)))
+
+# Create a workflow for Lasso regression with hyperparameter tuning
+lasso_wf <- workflow() %>%
+  add_model(lasso_spec) %>%
+  add_recipe(lasso_recipe)
+
+# Set up the cross-validation
+folds <- vfold_cv(data = data_train, v = 10)
+
+# Tune the Lasso model using cross-validation
+lasso_tune <- tune_grid(
+  object = lasso_wf,
+  resamples = folds,
+  grid = lasso_grid,
+  control = control_grid(verbose = TRUE)
+)
+
+# Get the best model
+best_model <- select_best(lasso_tune, metric = "rmse")
+
+# Finalize the best-tuned model obtained from tuning
+final_lasso_model <- tune::finalize_model(best_model) # THE MODEL STOPS WORKING HERE, TRIED MANY THINS. ASK ALENA.
+
+# Fit the finalized model to the training data
+lasso_fit <- final_lasso_model %>%
+  fit(data = data_train)
+
+# Extract tuning results
+tuning_results <- lasso_tune %>%
+  collect_metrics()
+
+# Get the best penalty parameter
+best_penalty <- lasso_tune %>%
+  select_best("rmse") %>%
+  pull(penalty)
+
+# Fitting the best Lasso model using v-fold resampling method
+lasso_fit_rs <- lasso_wf %>%
+  fit_resamples(
+    resamples = folds,
+    control = control_resamples(save_pred = TRUE, save_workflow = TRUE),
+    metrics = metric_set(accuracy, precision, recall)
+  )
+
+```
