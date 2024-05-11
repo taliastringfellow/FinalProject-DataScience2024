@@ -46,6 +46,8 @@ library(spData)
 library(colorspace)
 library(missRanger)
 library(vip)
+library(ggfortify) 
+library(FactoMineR) 
 ```
 
 # Read in Data
@@ -353,9 +355,6 @@ plot(Argentinadata_with_clusters[, c("age", "educ_attainment")],
 ```
 
 ```{r}
-library(ggfortify)  # For autoplot.PCA function
-library(FactoMineR) # For PCA analysis
-
 # Perform PCA analysis
 pca_result <- PCA(Argentinadata, graph = FALSE)
 
@@ -377,29 +376,6 @@ Argentinadata <- Workingdata %>% filter(country_num==17) #Choosing Argentina
 
 Argentinadata <- Argentinadata %>% select(skin_color, ethnicity, employed, formal, political_involvement, community_involvement, mobile, social_media, male, age, household_members, income, university_factor)
 
-```
-
-Imputing data
-```{r}
-library(mice)
-
-#Convert data to a simple dataframe
-Argentinadata <- zap_labels(Argentinadata)
-
-# Inspect the pattern of missingness
-md.pattern(Argentinadata)
-
-# Convert data to a mids object
-Argentinadata_imput <- mice(Argentinadata, seed = 123) 
-
-# Perform imputation using MICE
-Argentinadata <- complete(Argentinadata_imput)
-
-#Remove .id and .imp for the analysis
-Argentinadata <- Argentinadata %>% select(skin_color, ethnicity, employed, formal, political_involvement, community_involvement, mobile, social_media, male, age, household_members, income, university_factor)
-```
-
-```{r}
 #Splitting the data
 set.seed(20201020)
 # create a split object
@@ -411,7 +387,7 @@ workingdata_test <- testing(x = educ_split)
 
 ## Come up with Models & Estimation
 
-Building a **probit classigifation model** with embedded regularization to quantify likelihood of making it to college based on our pre-defined predictors:
+Building a **probit classififation model** with embedded regularization to quantify likelihood of making it to college based on our pre-defined predictors:
 
 ```{r}
 # Create a recipe
@@ -605,7 +581,7 @@ rf_model <- randomForest(formula = university_factor ~ ., data = workingdata_tra
 var_importance <- importance(rf_model)
 
 # Plot variable importance
-var_importance_plot <- varImpPlot(rf_model)
+var_importance_plot <- varImpPlot(rf_model, main = "Variable Importance - Random Forest")
 print(var_importance_plot)
 
 ```
