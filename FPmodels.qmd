@@ -44,60 +44,13 @@ library(scales)
 library(geobr)
 library(spData)
 library(colorspace)
+library(missRanger)
 ```
 
 # Read in Data
 
 ```{r}
 lat_am_pop_2023 <- read_dta("Merge_2023_LAPOP_AmericasBarometer_v1.0_w.dta")
-
-```
-
-## Data cleaning
-
-In this section, we identify and clean our variables of interest
-
-Variables of interest:
-
-[**Etnicity/ skin color identification**]{.underline}
-
-Colorr: contains individual skintone on a scale form 0 to 11 (categorical)
-
-Colori: interviewer skincolor
-
-Etid: self perceived ethnicity (categorical)
-
-[**Employment Status**]{.underline}
-
-Ocup4a: employment status (dummy)
-
-formal: formal job (dummy)
-
-[**Social Capital**]{.underline}
-
-cp13: political party meetings attendance (frequency of attendance, categorical)
-
-cp8: community meetings attendance (frequency of attendance, categorical)
-
-r4a: has a mobile phone (dummy)
-
-smedia1n: has social media (dummy)
-
-[**Demographic Data**]{.underline}
-
-q1tc_r: sex (make dummy)
-
-q2: age (continuous)
-
-q12cn: number of members in the household
-
-q10inc: income (Argentine pesos, categorical) (for Argentina)
-
-Edre: education attainment (all levels)
-
-pais : country (numeric)
-
-```{r}
 
 Workingdata <- lat_am_pop_2023 %>% select(colorr, colori, etid, ocup4a, formal, cp13, cp8, r4a, smedia1n, q1tc_r, q2, q12cn, q10inc, edre, pais, ur, q14motan, prov)
 
@@ -321,89 +274,38 @@ SouthAmerica_only <- Workingdata %>%
          | country_name == "Venezuela" 
          | country_name == "Colombia")
 
+
 ```
 
-## Exploratory Data Analysis
-
-## Geospatial data upload
 
 ```{r}
+# Check for missing values
+missing_values <- sum(is.na(Workingdata))
+if (missing_values > 0) {
+  cat("There are", missing_values, "missing values in the dataset.\n")
+  # Handle missing values here (e.g., imputation or other preprocessing steps)
+} else {
+  cat("No missing values found in the dataset.\n")
+}
 
-data("world")
+#There are 122946 missing values in the dataset
 
-sa_all_mapping <- world %>%
-  filter(continent == "South America") 
+#Imputing missing values with MissRanger
+Workingdata <- missRanger(Workingdata, num.trees = 30, num.threads = 2)
+summary(Workingdata)
 
-#need to take out countries that are not in the other datasets: Falkland Islands, Venezuela, Guyana, French Guiana 
-sa_mapping <- sa_all_mapping %>%
-  filter(name_long != "Falkland Islands" & name_long != "Venezuela" & name_long != "Guyana")
+#No Missing values found in the dataset
 
-#province level data for each country 
-geoboundaries <- gb_adm1() %>%
-  filter(shapeGroup %in% c("ARG", "COL", "BRA", "URY", "CHL", "VEN", "PRY", "PER", "ECU", "SUR", "GUY", "GUF", "BOL")) 
-
-
-#Argentina province level data
-arg <- gb_adm1("ARG")
-
-#mapping argentina 
-plot(st_geometry(arg),
-     col = rgb(red = 1, green = 0, blue = 0, alpha = 0.5),
-     axes = TRUE, graticule = TRUE)
-
-#exploring other geospatial data on south america 
-library(remotes)
-remotes::install_github("wmgeolab/rgeoboundaries")
-library(rgeoboundaries)
-
-#Pulling Argentina specific data 
-Argentina <- geoboundaries(
-     country = "Argentina",
-     adm_lvl = "adm1",
-     type = "simplified") 
-Argentina <- geoboundaries(
-     country = "Argentina",
-     adm_lvl = "adm1",
-     type = "simplified") 
- 
-
-#mapping south america by population 
-pop_geom <- sa_all_mapping %>%
-  ggplot() +
-  geom_sf(aes(fill=pop/10^6), color = "brown", size = 0.1) +
-  ggrepel::geom_label_repel(aes(label = name_long, geometry = geom),
-    stat = "sf_coordinates",
-    min.segment.length = 0,
-    size = 3,
-    color = "black") + 
-  scale_fill_continuous_sequential(palette= "Heat 2")+
-    labs(title = "Population by Country\nin Millions of Inhabitants", fill= "Pop.\n(in millions)")+
-  theme_void() +
-    theme(legend.title=element_text(size=9), 
-          plot.title = element_text(face = "bold", hjust = 0.5),
-          plot.title.position = "plot")
-
-
-#mapping South America by Life Expectancy 
-le_geom <- sa_all_mapping %>%
-  ggplot()+
-  geom_sf(aes(fill = lifeExp), color = "brown", size = 0.1) +
-  ggrepel::geom_label_repel(aes(label = round(lifeExp),2, geometry = geom),
-    stat = "sf_coordinates",
-    min.segment.length = 0,
-    size = 3,
-    color = "black") + 
-  scale_fill_continuous_sequential(palette= "Heat 2")+
-  labs(title = "Average Life Expenctancy by Country", fill = "Life Expectancy\n(in years)") +
-  theme_void() +
-    theme(legend.title=element_text(size=9),
-          plot.title = element_text(face = "bold", hjust = 0.5),
-          plot.text = element_text(face = "bold"),
-          plot.title.position = "plot")
-
-#side by side:
-pop_geom + le_geom 
 ```
+We use Library missRanger for imputing missing values. The "ranger" package (Wright & Ziegler) is helpful to do fast missing value imputation by chained random forests, see Stekhoven & Buehlmann and Van Buuren & Groothuis-Oudshoorn. Between the iterative model fitting, it offers the option of predictive mean matching. This firstly avoids imputation with values not present in the original data (like a value 0.3334 in a 0-1 coded variable). Secondly, predictive mean matching tries to raise the variance in the resulting conditional distributions to a realistic level. This allows to do multiple imputation when repeating the call to missRanger().
+
+References
+1. Wright, M. N. & Ziegler, A. (2016). ranger: A Fast Implementation of Random Forests for
+High Dimensional Data in C++ and R. Journal of Statistical Software, in press. <arxiv.org/abs/1508.04409>.
+2. Stekhoven, D.J. and Buehlmann, P. (2012). ’MissForest - nonparametric missing value impu-
+tation for mixed-type data’, Bioinformatics, 28(1) 2012, 112-118. https://doi.org/10.1093/bioinformatics/btr597.
+3. Van Buuren, S., Groothuis-Oudshoorn, K. (2011). mice: Multivariate Imputation by Chained Equations in R. Journal of Statistical Software, 45(3), 1-67. http://www.jstatsoft.org/v45/i03/
+
 
 ## 5. Data Analysis: using machine learning to predict attending to university in Argentina
 
@@ -414,49 +316,31 @@ In this section, we focus on understanding the determinants of achieving univers
 ```{r}
 Argentinadata <- Workingdata %>% filter(country_num==17) #Choosing Argentina
 
-#Convert data to a simple dataframe
-Argentinadata <- zap_labels(Argentinadata)
-
-# Inspect the pattern of missingness
-before <- md.pattern(Argentinadata)
-
-# Convert data to a mids object
-Argentinadata_imput <- mice(Argentinadata, seed = 123) 
-
-# Perform imputation using MICE
-Argentinadata <- complete(Argentinadata_imput)
-
-#Splitting the data
-set.seed(20201020)
-# create a split object
-educ_split <- initial_split(data = Argentinadata, prop = 0.75)
-# create the training and testing data
-workingdata_train <- training(x = educ_split)
-workingdata_test <- testing(x = educ_split)
+Argentinadata <- Argentinadata %>%  select(-country_name, -university_factor)
 
 ```
 
 ### Cluster Analysis ### see in detail tomorrow
 ```{r}
-num_clusters <- 4  
 
-#Fit the Model
-kmeans_model <- kmeans(workingdata_train, centers = num_clusters)
+num_clusters <- 4
 
-#Evaluate Clusters - Silhouette analysis 
-silhouette_result <- silhouette(kmeans_model$cluster, dist(data))
-silhouette_plot <- fviz_silhouette(silhouette_result)
-print(silhouette_plot)
+# Fit the k-means clustering model
+kmeans_model <- kmeans(Argentinadata, centers = num_clusters, nstart = 100)
 
-# Step 5: Visualize Clusters
-# Plot the clusters
-ggplot(data, aes(x = x_variable, y = y_variable, color = as.factor(kmeans_model$cluster))) +
-  geom_point() +
-  labs(title = "K-means Clustering",
-       x = "X Variable",
-       y = "Y Variable",
-       color = "Cluster") +
-  theme_minimal()
+# Print the kmeans_model object
+kmeans_model
+
+# Retrieve cluster centers
+cluster_centers <- kmeans_model$centers
+
+# Assign cluster labels to each observation
+cluster_labels <- kmeans_model$cluster
+
+# Add cluster labels to the original data
+Argentinadata_with_clusters <- cbind(Argentinadata, Cluster = cluster_labels)
+
+
 ```
 
 
