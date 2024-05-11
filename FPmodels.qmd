@@ -3,9 +3,11 @@ title: "FPModels"
 format: pdf
 editor: visual
 ---
+
 ## Final Project Studying Latin America
 
 # Packages
+
 ```{r}
 library(tidyverse)
 library(tidymodels)
@@ -71,7 +73,7 @@ Ocup4a: employment status (dummy)
 
 formal: formal job (dummy)
 
-[**Social Capital**]{.underline} 
+[**Social Capital**]{.underline}
 
 cp13: political party meetings attendance (frequency of attendance, categorical)
 
@@ -300,7 +302,8 @@ Workingdata <- Workingdata %>%
          educ_attainment = edre,
          political_involvement = cp13,
          community_involvement  =cp8, 
-         country_num = pais)
+         country_num = pais,
+         household_members = q12cn)
 
 
 SouthAmerica_only <- Workingdata %>% 
@@ -320,9 +323,10 @@ SouthAmerica_only <- Workingdata %>%
 
 ```
 
-## Exploratory Data Analysis 
+## Exploratory Data Analysis
 
-## Geospatial data upload 
+## Geospatial data upload
+
 ```{r}
 
 data("world")
@@ -401,15 +405,91 @@ le_geom <- sa_all_mapping %>%
 pop_geom + le_geom 
 ```
 
-## 5. Data Analysis: using supervised machine learning to predict attending to university in Argentina
+## 5. Data Analysis: using machine learning to predict attending to university in Argentina
 
-In this section, we focus on understanding the determinants of achieving university education in Argentina. A key feature of the Argentine superior education system is that the country has a public university system funded by the federal government to be "free" for students. 
+In this section, we focus on understanding the determinants of achieving university education in Argentina. A key feature of the Argentine superior education system is that the country has a public university system funded by the federal government to be "free" for students.
+
+## 5.1 Unsupervised Machine Learning
 
 ```{r}
 Argentinadata <- Workingdata %>% filter(country_num==17) #Choosing Argentina
 
-Argentinadata <- Argentinadata %>% select(skin_color, colori, ethnicity, employed, formal, political_involvement, community_involvement, mobile, social_media, male, age, q12cn, income, educ_attainment)
+#Convert data to a simple dataframe
+Argentinadata <- zap_labels(Argentinadata)
 
+# Inspect the pattern of missingness
+before <- md.pattern(Argentinadata)
+
+# Convert data to a mids object
+Argentinadata_imput <- mice(Argentinadata, seed = 123) 
+
+# Perform imputation using MICE
+Argentinadata <- complete(Argentinadata_imput)
+
+#Splitting the data
+set.seed(20201020)
+# create a split object
+educ_split <- initial_split(data = Argentinadata, prop = 0.75)
+# create the training and testing data
+workingdata_train <- training(x = educ_split)
+workingdata_test <- testing(x = educ_split)
+
+```
+
+### Cluster Analysis ### see in detail tomorrow
+```{r}
+num_clusters <- 4  
+
+#Fit the Model
+kmeans_model <- kmeans(workingdata_train, centers = num_clusters)
+
+#Evaluate Clusters - Silhouette analysis 
+silhouette_result <- silhouette(kmeans_model$cluster, dist(data))
+silhouette_plot <- fviz_silhouette(silhouette_result)
+print(silhouette_plot)
+
+# Step 5: Visualize Clusters
+# Plot the clusters
+ggplot(data, aes(x = x_variable, y = y_variable, color = as.factor(kmeans_model$cluster))) +
+  geom_point() +
+  labs(title = "K-means Clustering",
+       x = "X Variable",
+       y = "Y Variable",
+       color = "Cluster") +
+  theme_minimal()
+```
+
+
+
+## 5.2 Supervised Machine Learning
+```{r}
+Argentinadata <- Workingdata %>% filter(country_num==17) #Choosing Argentina
+
+Argentinadata <- Argentinadata %>% select(skin_color, ethnicity, employed, formal, political_involvement, community_involvement, mobile, social_media, male, age, household_members, income, university_factor)
+
+```
+
+Imputing data
+```{r}
+library(mice)
+
+#Convert data to a simple dataframe
+Argentinadata <- zap_labels(Argentinadata)
+
+# Inspect the pattern of missingness
+md.pattern(Argentinadata)
+
+# Convert data to a mids object
+Argentinadata_imput <- mice(Argentinadata, seed = 123) 
+
+# Perform imputation using MICE
+Argentinadata <- complete(Argentinadata_imput)
+
+#Remove .id and .imp for the analysis
+Argentinadata <- Argentinadata %>% select(skin_color, ethnicity, employed, formal, political_involvement, community_involvement, mobile, social_media, male, age, household_members, income, university_factor)
+```
+
+```{r}
 #Splitting the data
 set.seed(20201020)
 # create a split object
@@ -421,7 +501,7 @@ workingdata_test <- testing(x = educ_split)
 
 ## Come up with Models & Estimation
 
-Building a **probit classigifation model** to quantify likelihood of making it to college based on our pre-defined predictors:
+Building a **probit classigifation model** with embedded regularization to quantify likelihood of making it to college based on our pre-defined predictors:
 
 ```{r}
 # Create a recipe
@@ -437,7 +517,6 @@ probit_model <- logistic_reg() %>%
 probit_wf <- workflow() %>%
   add_model(probit_model) %>%
   add_recipe(probit_recipe)
-
 
 # Set folds for cross-validation
 folds <- vfold_cv(data = workingdata_train, v = 10)
@@ -461,22 +540,22 @@ tree_recipe <- recipe(formula = university_factor ~ ., data = workingdata_train)
   step_impute_median(all_numeric_predictors()) %>%
   step_impute_mode(all_nominal_predictors()) 
 
+# Define the parameter grid
+param_grid <- expand.grid(
+  min_n = c(2, 5, 10, 15),   
+  max_depth = c(3, 4, 5, 6)
+)
+
 # Create a cart model object
 lapop_tree <- 
   decision_tree() %>%
   set_engine("rpart", model = TRUE) %>%
-  set_mode("classification")
+  set_mode("classification")  
 
 # Create a workflow
 tree_wf <- workflow() %>%
   add_recipe(tree_recipe) %>%
   add_model(lapop_tree) 
-
-# Define the parameter grid
-param_grid <- expand.grid(
-  min_n = c(2, 5, 10, 15),   # Different values for the minimum number of observations in a node
-  maxdepth = c(3, 5, 7, 10)  # Different values for the maximum tree depth
-)
 
 # Tune the model
 tree_tune <- tree_wf %>%
@@ -506,5 +585,120 @@ rpart.plot::rpart.plot(x = best_tree_fit$fit)
 
 ```
 
+Building a **random forest** to quantify likelihood of making it to college based on our pre-defined predictors:
 
 ```{r}
+# Create the recipe object and impute missing values
+rf_recipe <- recipe(formula = university_factor ~ ., data = workingdata_train) %>%
+  step_normalize(all_numeric_predictors()) %>%
+  step_nzv(all_numeric_predictors()) %>%
+  step_impute_median(all_numeric_predictors()) %>%
+  step_impute_mode(all_nominal_predictors())
+
+# Create a random forest model object
+lapop_rf <- 
+  rand_forest() %>%
+  set_engine("ranger") %>%
+  set_mode("classification")
+
+# Create a workflow
+rf_wf <- workflow() %>%
+  add_recipe(rf_recipe) %>%
+  add_model(lapop_rf)
+
+# Fit the model
+rf_fit_rs <- rf_wf %>%
+  fit_resamples(
+    resamples = folds,
+    control = control_resamples(save_pred = TRUE, save_workflow = TRUE),
+    metrics = metric_set(precision, accuracy, recall)
+  )
+
+```
+
+Evaluate the models:
+
+```{r}
+#Collecing metrics
+probit_metrics <- collect_metrics(probit_fit_rs, summarize = FALSE)
+tree_metrics <- collect_metrics(tree_tune, summarize = FALSE)
+rf_metrics <- collect_metrics(rf_fit_rs, summarize = FALSE)
+
+# Add a column to indicate the model for each metrics dataframe
+probit_metrics$model <- "Probit"
+tree_metrics$model <- "Decision Tree"
+rf_metrics$model <- "Random Forest"
+
+# Combine the model metrics into one data frame
+combined_metrics <- bind_rows(probit_metrics, tree_metrics, rf_metrics)
+
+#Evaluate
+combined_metrics %>%
+  group_by(model, .metric) %>%
+  mutate(modelmean = mean(.estimate)) %>%
+  ungroup() %>%
+  ggplot(aes(x = model, color = .metric)) + 
+  geom_jitter(aes(y = .estimate), 
+              position = position_dodge(width = 0.5), 
+              alpha = 0.65, 
+              size = 2) +
+  geom_point(aes(y = modelmean), 
+             shape = 95, 
+             position = position_dodge(width = 0.5), 
+             size = 10) +
+  labs(x = "Model", 
+       y = "Metric", 
+       title = "Model performance") +
+  theme_minimal()
+```
+**Decision Tree Model**
+
+-   **Accuracy**: The Decision Tree model's accuracy exhibits some variability, particularly towards the lower end, but it generally remains good, consistently above 70%. Despite some fluctuations, it maintains a respectable level of correctness in its predictions across different evaluations.
+
+-   **Precision**: Precision of the Decision Tree model varies across evaluations, performing poorer than Random Forest but better than Probit on average. While it might not achieve the same level of precision as Random Forest, it still manages to provide relatively accurate positive predictions, albeit with some variability.
+
+-   **Recall**: Decision Tree model demonstrates the highest recall compared to the other models, on average. It excels in capturing positive instances, even though its recall values might fluctuate significantly across different evaluations. Despite the variability, its average recall tends to be higher than both Random Forest and Probit, indicating its effectiveness in identifying relevant cases within the dataset.
+
+**Random Forest Model**
+
+-   **Accuracy**: The Random Forest model generally exhibits higher accuracy with less variability across different evaluations. This means it consistently provides accurate predictions across various datasets or subsets. It is above 70%.
+
+-   **Precision**: Additionally, Random Forest tends to have higher precision compared to other models, indicating fewer false positives. Moreover, it shows less variability in precision outcomes across different folds or evaluations, suggesting more stable performance.
+
+-   **Recall**: While Random Forest tends to have good overall performance, its recall might not be as high as some other models on average.
+
+**Probit Model**:
+
+-   **Accuracy**: The Probit model demonstrates considerable variability in accuracy across different estimations. While in some cases, it may outperform both Random Forest and Decision Trees, in others, its accuracy can be significantly lower. This inconsistency suggests that the Probit model's performance is less stable in terms of overall correctness of predictions. It is around 70%.
+
+-   **Precision**: Precision of the Probit model tends to exhibit high variability and is generally poorer on average compared to other models. This indicates that the Probit model might struggle to effectively minimize false positives, leading to a higher proportion of incorrect positive predictions compared to Random Forest and Decision Trees.
+
+-   **Recall**: The Probit model's recall performance is not as strong as other models. It might fail to capture as many positive instances as Random Forest or Decision Trees, indicating limitations in its ability to identify all relevant cases within the dataset.
+
+In a nutshell, the Random Forest model performed better in all the pre-selected evaluation metrics. In the nex section, we test it against out testing data. 
+
+## 3. Implementation of a Random Forest
+
+```{r}
+# Preprocess the test dataset using the recipe
+test_processed <- rf_recipe %>%
+  prep() %>%
+  bake(new_data = workingdata_test)
+
+# Fit the model and select the best tuning configuration
+rf_fit_best <- rf_fit_rs %>%
+  fit_best()
+
+# Predict using the best model configuration
+test_predictions <- rf_fit_best %>%
+  predict(new_data = workingdata_test) %>%
+  bind_cols(workingdata_test)
+
+# Evaluate the model's performance on the test dataset
+test_metrics <- test_predictions %>%
+  metrics(truth = university_factor, estimate = .pred_class)
+
+# View the test metrics
+print(test_metrics)
+```
+
