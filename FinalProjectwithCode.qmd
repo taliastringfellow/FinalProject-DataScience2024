@@ -543,7 +543,7 @@ eth_prop_bargraph <- eth_prop_df_long %>%
 
 ```
 
-
+## Transforming Educational Attainment Results of Survey to Country Level 
 ```{r}
 #creating table that counts the education breakout by country 
 countryxeduc_tbl <- SouthAmerica_only %>%
@@ -653,24 +653,35 @@ sa_mapping <- sa_mapping %>%
 educ_geom <-sa_mapping %>%
   ggplot()+
   geom_sf(aes(fill = mean_education), color = "white", size = 0.1) +
-  geom_sf_text(aes(label = round((mean_education),2)),
+   ggrepel::geom_label_repel(aes(label = round((mean_education),2), geometry = geom),
+    stat = "sf_coordinates",
+    min.segment.length = 0,
     size = 3,
-    color = "black") +
+    color = "black") + 
   scale_fill_gradient(name = "Avg. Educ\non scale of \n0 to 6", 
                       low = "#C0D8FD", high = "#0F6CFC") +
-  labs(title = "Average Educational Outcome \nin South America", subtitle = "using representative data", caption = "Education is categorized based on an increasing \neducational achievement. Variables are coded as follows:\nNone = 0,\nPrimary School Incomplete = 1\nPrimary School Complete = 2\nHigh-school Incomplete = 3\nHigh-school Complete = 4\nTertiary/University Incomplete = 5\nTertiary/University Complete = 6\n findings from representative survey data 'LAPOP' 2023") +
+  labs(title = "Average Educational Outcome \nin South America", subtitle = "using representative data", caption = "Education is categorized based on an increasing \neducational achievement. Variables are coded as follows:\nNone = 0,\nPrimary School Incomplete = 1\nPrimary School Complete = 2\nHigh-school Incomplete = 3\nHigh-school Complete = 4\nTertiary/University Incomplete = 5\nTertiary/University Complete = 6") +
   theme_void() +
-  theme(plot.caption = element_text(hjust = 1, size =7))
+  theme(plot.caption = element_text(face = "italic", hjust = 0, size =7),
+        legend.title = element_text(size =9),
+        plot.title = element_text(face = "bold", hjust = 0.5),
+        plot.subtitle = element_text(face = "italic", hjust = 0.5, size = 8),
+        plot.title.position = "plot")
+
 
 #mapping South America by GDP per Capita 
 gdp_geom <- sa_mapping %>%
   ggplot()+
   geom_sf(aes(fill = gdpPercap), color = "white", size = 0.1) +
-  scale_fill_gradient(name = "gdpPercap", 
+  scale_fill_gradient(name = "GDP\n(per Capita)", 
                       low = "#C0D8FD", high = "#0F6CFC",
                       labels = scales::dollar)+
-  labs(title = "GDP per Capita \nin South America") +
-  theme_void() 
+  labs(title = "GDP per Capita \nin South America", caption = "Findings from representative\nsurvey data 'LAPOP' 2023") +
+  theme_void() +
+  theme(legend.title=element_text(size =9),
+        plot.title = element_text(face = "bold", hjust = 0.5),
+        plot.caption = element_text(face = "italic", hjust = 0.5, size =7),
+        plot.title.position = "plot")
 
 #side by side:
 educ_geom + gdp_geom 
@@ -701,8 +712,12 @@ skincolorpalette <- tibble(skincodes, skincolor)
 ggplot(SouthAmerica_only, aes(x = factor(skin_color))) +
   geom_bar(aes(fill = factor(skin_color))) +  # Fill mapped to colorr
   scale_fill_manual(values = skincolor) +
-  labs(title = "Self-reported skin color", x = "Skin color (from lighter to darker)", y = "Individuals in the sample", fill="Color")+
-  theme_minimal()
+  labs(title = "Self-reported skin color", x = "Skin color (from lighter to darker)", y = "Number of Individuals from the sample", fill="Skin Color", caption = "Findings from representative survey data 'LAPOP' 2023,\nrespondents where asked to self-report their skin color.")+
+  theme_minimal() +
+  theme(legend.title=element_text(size =9),
+        plot.title = element_text(face = "bold", hjust = 0.5),
+        plot.caption = element_text(face = "italic", hjust = 0.5, size =7),
+        plot.title.position = "plot")
 
 ```
 
