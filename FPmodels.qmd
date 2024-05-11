@@ -45,6 +45,7 @@ library(geobr)
 library(spData)
 library(colorspace)
 library(missRanger)
+library(vip)
 ```
 
 # Read in Data
@@ -316,13 +317,13 @@ In this section, we focus on understanding the determinants of achieving univers
 ```{r}
 Argentinadata <- Workingdata %>% filter(country_num==17) #Choosing Argentina
 
-Argentinadata <- Argentinadata %>%  select(-country_name, -university_factor)
+Argentinadata <- Argentinadata %>%  select(-country_name, -country_num, -university_factor)
 
 ```
 
-### Cluster Analysis ### see in detail tomorrow
+### Cluster Analysis 
 ```{r}
-
+set.seed(20201020)
 num_clusters <- 4
 
 # Fit the k-means clustering model
@@ -340,7 +341,32 @@ cluster_labels <- kmeans_model$cluster
 # Add cluster labels to the original data
 Argentinadata_with_clusters <- cbind(Argentinadata, Cluster = cluster_labels)
 
+tidy(kmeans_model) %>%
+  knitr::kable(digits = 2)
 
+# Plot the clusters
+plot(Argentinadata_with_clusters[, c("age", "educ_attainment")], 
+     col = cluster_labels, pch = 19, main = "K-means Clustering", 
+     xlab = "Age", ylab = "Education Attainment")
+
+
+```
+
+```{r}
+library(ggfortify)  # For autoplot.PCA function
+library(FactoMineR) # For PCA analysis
+
+# Perform PCA analysis
+pca_result <- PCA(Argentinadata, graph = FALSE)
+
+# Plot the PCA results
+pca_with_clusters <- cbind(as.data.frame(pca_result$ind$coord), Cluster = cluster_labels)
+
+# Plot PCA results with cluster labels
+ggplot(pca_with_clusters, aes(x = Dim.1, y = Dim.2, color = factor(Cluster))) +
+  geom_point() +
+  labs(title = "PCA with K-means Clustering", x = "PC1", y = "PC2", color = "Cluster") +
+  theme_minimal()
 ```
 
 
@@ -405,6 +431,7 @@ probit_wf <- workflow() %>%
 # Set folds for cross-validation
 folds <- vfold_cv(data = workingdata_train, v = 10)
 
+set.seed(20201020)
 # Fitting probit model using v-fold resampling method
 probit_fit_rs <- probit_wf %>%
   fit_resamples(
@@ -417,6 +444,8 @@ probit_fit_rs <- probit_wf %>%
 Building a **decision tree** to quantify likelihood of making it to college based on our pre-defined predictors:
 
 ```{r}
+set.seed(20201020)
+
 # Create the recipe object 
 tree_recipe <- recipe(formula = university_factor ~ ., data = workingdata_train) %>%
   step_normalize(all_numeric_predictors()) %>%
@@ -427,7 +456,7 @@ tree_recipe <- recipe(formula = university_factor ~ ., data = workingdata_train)
 # Define the parameter grid
 param_grid <- expand.grid(
   min_n = c(2, 5, 10, 15),   
-  max_depth = c(3, 4, 5, 6)
+  max_depth = c(2, 3, 4)
 )
 
 # Create a cart model object
@@ -472,6 +501,8 @@ rpart.plot::rpart.plot(x = best_tree_fit$fit)
 Building a **random forest** to quantify likelihood of making it to college based on our pre-defined predictors:
 
 ```{r}
+set.seed(20201020)
+
 # Create the recipe object and impute missing values
 rf_recipe <- recipe(formula = university_factor ~ ., data = workingdata_train) %>%
   step_normalize(all_numeric_predictors()) %>%
@@ -560,6 +591,24 @@ combined_metrics %>%
 -   **Recall**: The Probit model's recall performance is not as strong as other models. It might fail to capture as many positive instances as Random Forest or Decision Trees, indicating limitations in its ability to identify all relevant cases within the dataset.
 
 In a nutshell, the Random Forest model performed better in all the pre-selected evaluation metrics. In the nex section, we test it against out testing data. 
+
+
+## Variable importance in the random forest model
+
+```{r}
+# Fit the random forest model
+library(randomForest)
+
+rf_model <- randomForest(formula = university_factor ~ ., data = workingdata_train, ntree = 500)
+
+# Calculate variable importance
+var_importance <- importance(rf_model)
+
+# Plot variable importance
+var_importance_plot <- varImpPlot(rf_model)
+print(var_importance_plot)
+
+```
 
 ## 3. Implementation of a Random Forest
 
