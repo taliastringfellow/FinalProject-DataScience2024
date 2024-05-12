@@ -161,6 +161,25 @@ Workingdata <- Workingdata %>%
     ocup4a == 7 ~ 0,
   ))
 
+#cleaning skin color (self identified) 
+Workingdata <- Workingdata %>%
+  mutate(colorr = case_when(
+    colorr == 1 ~ 1,
+    colorr == 2 ~ 2,
+    colorr == 3 ~ 3,
+    colorr == 4 ~ 4,
+    colorr == 5 ~ 5,
+    colorr == 6 ~ 6,
+    colorr == 7 ~ 7, 
+    colorr == 8 ~ 8,
+    colorr == 9 ~ 9,
+    colorr == 10 ~ 10,
+    colorr == 11 ~ 11, 
+    colorr == 97 ~ NA, 
+    TRUE ~ NA
+  ))
+
+
 #cleaning formal vs informal work 
 Workingdata <- Workingdata %>%
   mutate(formal = case_when(
@@ -422,9 +441,9 @@ summary(Workingdata)
 
 ## 4. Exploratory Analysis: higher education in South America
 
-### Geospatial data upload 
+### Geospatial Data Upload and Regional Context Mapping 
 ```{r}
-
+#using the rnaturalearth package
 data("world")
 
 sa_all_mapping <- world %>%
@@ -438,14 +457,8 @@ sa_mapping <- sa_all_mapping %>%
 geoboundaries <- gb_adm1() %>%
   filter(shapeGroup %in% c("ARG", "COL", "BRA", "URY", "CHL", "VEN", "PRY", "PER", "ECU", "SUR", "GUY", "GUF", "BOL")) 
 
-
 #Argentina province level data
 arg <- gb_adm1("ARG")
-
-#mapping argentina 
-plot(st_geometry(arg),
-     col = rgb(red = 1, green = 0, blue = 0, alpha = 0.5),
-     axes = TRUE, graticule = TRUE)
 
 #exploring other geospatial data on south america 
 library(remotes)
@@ -457,13 +470,8 @@ Argentina <- geoboundaries(
      country = "Argentina",
      adm_lvl = "adm1",
      type = "simplified") 
-Argentina <- geoboundaries(
-     country = "Argentina",
-     adm_lvl = "adm1",
-     type = "simplified") 
- 
 
-#mapping south america by population 
+#mapping South America by population 
 pop_geom <- sa_all_mapping %>%
   ggplot() +
   geom_sf(aes(fill=pop/10^6), color = "brown", size = 0.1) +
@@ -490,7 +498,7 @@ le_geom <- sa_all_mapping %>%
     size = 3,
     color = "black") + 
   scale_fill_continuous_sequential(palette= "Heat 2")+
-  labs(title = "Average Life Expenctancy by Country", fill = "Life Expectancy\n(in years)") +
+  labs(title = "Average Life Expenctancy by Country", fill = "Life Expectancy\n(in years)", caption = ) +
   theme_void() +
     theme(legend.title=element_text(size=9),
           plot.title = element_text(face = "bold", hjust = 0.5),
@@ -500,20 +508,20 @@ le_geom <- sa_all_mapping %>%
 #side by side:
 pop_geom + le_geom 
 
-
 ```
 
-Here we are conducting some basic analysis of how South America maps given basic country level statistics. We see that Chile stands out with the highest life expectancy and somewhat smaller relative population. Brazil has the largest population by far with over 200 million people and has the median south American life expectancy of 75 years. 
+Here we are conducting some basic analysis of how South America maps given country level statistics in the rnaturalearth and rgeoboundaries packages. We see that Chile stands out with the highest life expectancy and somewhat smaller relative population. Brazil has the largest population by far with over 200 million people and has the median south American life expectancy of 75 years. 
 
-Please note this is not data from the LAPOP survey data, but rather best estimates of the true population size and life expectancy based on census / larger scale data from the geoboundaries Rpackage. 
+Please note this is not data from the LAPOP survey data, but rather best estimates of the true population size and life expectancy based on census / larger scale data. 
 
+### Exploring the LAPOP dataset - Age breakout 
 ```{r}
-#Investigating age distributions by country visually 
+#Investigating age distributions by country visually  
 SouthAmerica_only %>%
   ggplot(aes(age, fill = country_name)) +
   geom_bar() +
   facet_wrap(~country_name, scales = "free") +
-  labs(fill = "Country Name", title = "Age distribution of Data by Country", x = "Age (years)", y = "Count from Survey") +
+  labs(fill = "Country Name", title = "Age distribution of Data by Country", x = "Age (years)", y = "Count from Survey", caption = "From Representative sample from LAPOP in 2023") +
   theme_minimal() +
     theme(legend.title=element_text(size=9),
           plot.title = element_text(face = "bold", hjust = 0.5),
@@ -606,7 +614,10 @@ eth_prop_bargraph <- eth_prop_df_long %>%
 #use scales - categorical variable - fill manual and set colors with palette 
 #scale_fill_manual (vector with categories, colors with hex codes)
 
+#visualizing stacked bar graph 
+eth_prop_bargraph
 ```
+Unsurprisingly, Brazil has the highest demographics of citizens that identify as Black and Mulata. Uruguay has the largest white population with a majority white population. The largest community of those that identify as "other" is found in Suriname, followed by Peru. This is likely due to the well established indigenous communities. Argentina is interesting to investigate further because of the plurality but not majority white population followed closely by the Mestizo population. We are curious if the white and non-white ethncity breakout plays a role in education attainment. 
 
 ### Transforming Educational Attainment Results of Survey to Country Level 
 ```{r}
@@ -691,10 +702,12 @@ educ_prop_bargraph <- educ_prop_df_long %>%
         plot.caption = element_text(face = "italic", hjust = 0.5),
         plot.title.position = "plot")
 
-#putting the graphs on top of each other 
-(eth_prop_bargraph / educ_prop_bargraph) + plot_layout(nrow = 2, heights = c(1, 1))
+#visualizing stacked bar graph
+educ_prop_bargraph
 ```
+Peru stands out with the highest proportion of their survey respondents who have completed university, followed closely by Chile. Peru also stands out because they have the most respondents that have graduated from high school or higher. Moreover, Peru, Chile and Uruguay have the least survey respondents with no education at all. This makes us ponder whether there is a cultural or political context for Peru's high levels of proportionate educational attainment or if the survey methodology was such that they did not survey a representative sample in terms of education in Peru. 
 
+Interestingly, Uruguay has the most number of respondents who have not completed high school with approximately 70% of those surveyed. Argentina stands out with almost equal amounts of people with incompete and compete highschool educational attainments. 
 
 ```{r}
 #finding mean educational outcome by country
@@ -752,6 +765,7 @@ gdp_geom <- sa_mapping %>%
 educ_geom + gdp_geom 
 
 ```
+Average education outcome in South America is based on the 7 categories described in the caption of the first map. Here we can see another visual identifying Peru as leaders in average higher educational attainment despite having relatively low GDP/per cap. Argentina finds itself in the relative middle-high range with 3.78 mean education outcome as is visible in the GDP/cap graph.  
 
 ```{r}
 #creating table that counts education breakout by ethnicity 
@@ -1022,7 +1036,7 @@ Recall (Sensitivity): is the ratio of correctly predicted positive observations 
 As in this research exercise we are interested in predicting when our outcome variable (attending to university) takes on a positive value, we believe that precision is the most relevant metric.
 
 ```{r}
-#Collecing metrics
+#Collecting metrics
 probit_metrics <- collect_metrics(probit_fit_rs, summarize = FALSE)
 tree_metrics <- collect_metrics(tree_tune, summarize = FALSE)
 rf_metrics <- collect_metrics(rf_fit_rs, summarize = FALSE)
@@ -1113,11 +1127,11 @@ Our model has an accuracy rate of .75, meaning that it accurately predicts 75% o
 ## 6. Discussion of Results
 
 ### 6.1 Interpretation 
-Descriptive statistics
+First, we want to be clear, the models were not designed to, nor should they be used for predicting educational outcomes based on skin tone. Instead, the models should be analyzed in themselves to see if they pick up self described skin tones as a strong predictor of education outcome. This is why the Variable Importance analysis on the Radom Forest model is so intriguing. Here we see that of all variables, age plays the largest role in determining educational outcome. The data however is only for people 16 years and older, so there may be some larger education policy related reasons for why different generations have different educational outcomes. 
 
-Random Forest
+Income, unsurprisingly is second. This is something that has been largely explored and understood internationally as a true relationship. Indeed, the more well off a person is, the easier it is to stay in school or pursue higher education. Though, as we noted earlier - Argentina has free access to higher education. This indicates to us that there may be more going on in terms of how income plays a role. This is where the following variables of importance: formal, household_members, skin_color, and ethnicity come into play. Indeed, the dynamics of what kind of employment you have, how many people live in your home, and your race all play into income. This model tells the story we were expecting which is that ethnicity and skin tone do not necessarily drive the narrative of education outcome but instead are factors that tie other income and lifestyle related metrics together and impact expected educational outcome. 
 
-Why is this important for policy 
+From a policy perspective, one might expect free university and state required education followed by free university would mean that income would not play a role in expected education attainment. However, this model clearly signals that there is more than just the financial cost of attending school but also the opportunity cost that play a role in education outcome as well as the historical disparities that lead people to the circumstances they are in.
 
 ### 6.2 Limitation
 

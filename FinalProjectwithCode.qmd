@@ -270,19 +270,6 @@ arg_income_labels <- c("Between $0 and $14.000 pesos", "Between $14.001 and $26.
 # Assign labels FOR ARGENTINA INCOME 
 arg_income_values <- factor(arg_income_codes, levels = arg_income_codes, labels = arg_income_labels)
 
-#cleaning Income for BRAZIL ONLY 
-#arg_income_codes <- c(1701, 1702, 1703, 1704, 1705, 1706, 1707, 1708, 1709, 1710, 1711, 1712, 1713, 1714, 1715)
-
-# Labels for BRAZIL INCOME 
-#arg_income_labels <- c("Between $0 and $14.000 pesos", "Between $14.001 and $26.000 pesos", "Between $26.001 and $39.000 pesos",
-           # "Between $39.001 and $47.000 pesos", "Between $47.001 and $55.000 pesos", "Between $55.001 and $61.000 pesos",
-         #   "Between $61.001 and $68.000 pesos", "Between $68.001 and $81.000 pesos", "Between $81.001 and $88.000 pesos",
-          #  "Between $88.001 and $97.000 pesos", "Between $97.001 and $115.000 pesos", "Between $115.001 and $136.000 pesos",
-          #  "Between $136.001 and $168.000 pesos", "Between $168.001 and $221.000 pesos", "More than $221.000 pesos")
-
-# Assign labels FOR BRAZIL INCOME 
-#arg_income_values <- factor(income_codes, levels = income_codes, labels = income_labels)
-
 #Adding country labels 
 Workingdata <- Workingdata %>% 
   filter(pais < 39) %>% #getting rid of US and Canada from dataset 
@@ -973,3 +960,4 @@ lasso_fit_rs <- lasso_wf %>%
   )
 
 ```
+
