@@ -1,6 +1,9 @@
 # FinalProject-DataScience2024
 Final Project Repo for Into to Data Science for Public Policy - May 2024 
 
+Link to Github Page:
+https://taliastringfellow.github.io/FinalProject-DataScience2024/
+
 ## Summary
 
 This final project was initially motivated by the question of how race/ethnicity affects university access in South America. In the process, we turned to a general analysis of socioeconomic determinants of going to university. We use exploratory data analysis techniques to enhance our understanding of general socioeconomic indicators in the region, with a particular focus on university/education attainment. We then present a study case for Argentina, where we apply unsupervised and supervised machine learning techniques to answer our research question. In this case, we find that the most relevant variables in determining access to university are age, income, access to a formal job, household, and skin color. We conclude by suggesting future lines of research and a summary of the technical details we learned about the data during the process.
