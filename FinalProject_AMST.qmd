@@ -103,7 +103,7 @@ library(FactoMineR)
 ```{r}
 lat_am_pop_2023 <- read_dta("Merge_2023_LAPOP_AmericasBarometer_v1.0_w.dta")
 
-Workingdata <- lat_am_pop_2023 %>% select(colorr, colori, etid, ocup4a, formal, cp13, cp8, r4a, smedia1n, q1tc_r, q2, q12cn, q10inc, edre, pais, ur, q14motan, prov)
+Workingdata <- lat_am_pop_2023 %>% select(colorr, colori, etid, ocup4a, formal, cp13, cp8, r4a, smedia1n, q1tc_r, q2, q12cn, q10inc, edre, pais, ur, q14, q14motan, prov)
 ```
 
 **Data wrangling**
@@ -293,6 +293,15 @@ educ_labels <- c(
   "Tertiary/University Incomplete" = 5,
   "Tertiary/University Complete" = 6
 )
+
+#cleaning q14 which asks about considering emigrating in the next 3 years
+Workingdata <- Workingdata %>%
+  mutate(q14 = case_when(
+    q14 == 1 ~ 1,
+    q14 == 2 ~ 0,
+    TRUE ~ NA,
+  ))
+
 
 #cleaning Income for ARGENTINA ONLY 
 arg_income_codes <- c(1701, 1702, 1703, 1704, 1705, 1706, 1707, 1708, 1709, 1710, 1711, 1712, 1713, 1714, 1715)
@@ -707,7 +716,7 @@ educ_prop_bargraph
 ```
 Peru stands out with the highest proportion of their survey respondents who have completed university, followed closely by Chile. Peru also stands out because they have the most respondents that have graduated from high school or higher. Moreover, Peru, Chile and Uruguay have the least survey respondents with no education at all. This makes us ponder whether there is a cultural or political context for Peru's high levels of proportionate educational attainment or if the survey methodology was such that they did not survey a representative sample in terms of education in Peru. 
 
-Interestingly, Uruguay has the most number of respondents who have not completed high school with approximately 70% of those surveyed. Argentina stands out with almost equal amounts of people with incompete and compete highschool educational attainments. 
+Interestingly, Uruguay has the most number of respondents who have not completed high school with approximately 70% of those surveyed. Argentina stands out with almost equal amounts of people with incompete and compete High School educational attainments. 
 
 ```{r}
 #finding mean educational outcome by country
@@ -809,7 +818,9 @@ To conduct the following analysis, we selected only socioeconomic variables with
 ### 5.1 Unsupervised Machine Learning
 
 ```{r}
-Argentinadata <- Workingdata %>% filter(country_num==17) #Choosing Argentina
+Argentinadata <- Workingdata %>% 
+  filter(country_num==17) %>% #Choosing Argentina
+  select(-q14) #excluding q14 that was just useful for one metric 
 
 Argentinadata <- Argentinadata %>%  select(-country_name, -country_num, -university_factor,-migrating4educ)
 
@@ -847,6 +858,7 @@ plot(Argentinadata_with_clusters[, c("age", "income")],
      xlab = "Age", ylab = "Income")
 
 ```
+*Caption: 1702 means Between $14.001 and $26.000 pesos, 1706 means Between $55.001 and $61.000 pesos, 1710 means Between $88.001 and $97.000 pesos, 1714 means Between $168.001 and $221.000 pesos. Findings from representative\nsurvey data 'LAPOP' 2023"*
 
 K-means clustered the data into four groups according to their particular characteristics. Age seem to have the most clustering power. The model created four well-defined groups, organized around the means of 21, 33, 49 and 68, respectively. The following table presents the four groups and their means for each variable we use. In the subsequent diagram, we can observe no cluster variation across income categories.
 
@@ -1120,18 +1132,18 @@ test_metrics <- test_predictions %>%
 # View the test metrics
 print(test_metrics)
 ```
-In this section we test our Random Forest model in our testing data set, to evaluate its prediction power for unknown observations. This step is particularly relevant to assess whether the model suffers from overfitting, meaning it is extermely good with the data it was train on (capturing every nuances), but lacks prediction power when applied to unknown data.
+In this section we test our Random Forest model in our testing data set, to evaluate its prediction power for unknown observations. This step is particularly relevant to assess whether the model suffers from overfitting, meaning it is extremely good with the data it was train on (capturing every nuances), but lacks prediction power when applied to unknown data.
 
 Our model has an accuracy rate of .75, meaning that it accurately predicts 75% of the total observed values (both positives and negatives). This is consistent with the performance statistics we obtained in section 5.3, and indicates the model does not overfit the data.
 
 ## 6. Discussion of Results
 
-### 6.1 Interpretation 
-First, we want to be clear, the models were not designed to, nor should they be used for predicting educational outcomes based on skin tone. Instead, the models should be analyzed in themselves to see if they pick up self described skin tones as a strong predictor of education outcome. This is why the Variable Importance analysis on the Radom Forest model is so intriguing. Here we see that of all variables, age plays the largest role in determining educational outcome. The data however is only for people 16 years and older, so there may be some larger education policy related reasons for why different generations have different educational outcomes. 
+### 6.1 Policy Interpretation 
+First, we want to be clear, the models were not designed to, nor should they be used for predicting educational outcomes based on skin tone. Instead, the models should be analyzed in themselves to see if they pick up self described skin tones as a strong predictor of education outcome. This is why the Variable Importance analysis on the Random Forest model is so intriguing. Here we see that of all variables, age plays the largest role in determining educational outcome. The data however is only for people 18 years and older, so there may be some larger education policy related reasons for why different generations have different educational outcomes. 
 
-Income, unsurprisingly is second. This is something that has been largely explored and understood internationally as a true relationship. Indeed, the more well off a person is, the easier it is to stay in school or pursue higher education. Though, as we noted earlier - Argentina has free access to higher education. This indicates to us that there may be more going on in terms of how income plays a role. This is where the following variables of importance: formal, household_members, skin_color, and ethnicity come into play. Indeed, the dynamics of what kind of employment you have, how many people live in your home, and your race all play into income. This model tells     the story we were expecting which is that ethnicity and skin tone do not necessarily drive the narrative of education outcome but instead are factors that tie other income and lifestyle related metrics together and impact expected educational outcome. 
+Income, unsurprisingly is second. This is something that has been largely explored and understood internationally as a true relationship. Indeed, the more well off a person is, the easier it is to stay in school or pursue higher education. Though, as we noted earlier, Argentina has free access to higher education. This indicates to us that there may be more going on in terms of how income plays a role. This is where the following variables of importance: formal, household_members, skin_color, and ethnicity come into play. Indeed, the dynamics of what kind of employment you have, how many people live in your home, and your race all play into income. This model tells the story we were expecting, which is that ethnicity and skin tone do not necessarily drive the narrative of education outcome but instead are factors that tie other income and lifestyle related metrics together that then impact expected educational outcome. 
 
-From a policy perspective, one might expect free university and state required education followed by free university would mean that income would not play a role in expected education attainment. However, this model clearly signals that there is more than just the financial cost of attending school but also the opportunity cost that play a role in education outcome as well as the historical disparities that lead people to the circumstances they are in.
+From a policy perspective, one might expect state required education followed by free university (as is the case in Argentina) would mean that income would not play a role in expected education attainment. However, this model clearly signals that there is more than just the financial cost of attending school but also the opportunity cost that play a role in education outcome as well as the historical disparities that lead people to the circumstances they are in.
 
 ### 6.2 Limitation
 
@@ -1139,7 +1151,8 @@ One limitation to our research is that our models focus on one country in Latin 
 
 ### 6.3 Future Reserach Suggestions 
 
-We recommend that future researchers start first by scaling the model to other countries in the region then to all of South America. Of course, this research must be conduct using best practices of modeling including resampling and hyper parameter tuning. It is essential that future researchers standardize income across countries before scaling to the whole continent, and have relatively consistent variability across the indicator variables within the unsupervised learning model. The relative variability among countries could then be observed to see how different demographic characteristics play larger or smaller roles.
+Of course, any future research must be conduct using best practices of modeling including resampling and hyper parameter tuning. It is essential that future researchers standardize income across countries before scaling to the whole continent, and have relatively consistent variability across the indicator variables within the unsupervised learning model. Moreover, the weighting of the survey is something to dive deeper into if one wanted to expand on this project. 
 
-Future researchers could also do a regional investigation on how different variables affect regional educational outcomes within a country. To do so, they would need to see the labels associated with each administrative level within the LAPOP database and match it to geospatial data for visualizations. We would also recommend including different variables to see how the model reacts to being fed different demographics. Finally, the weighting of the survey is something to dive deeper into if one wanted to expand on this project. 
+We recommend that future researchers start first by scaling the model to other countries in the region then to all of South America. The relative variability among countries could then be observed to see how different demographic characteristics play larger or smaller roles.
 
+Future researchers could also do a regional investigation on how different variables affect regional educational outcomes within a country. To do so, they would need to see the labels associated with each administrative level within the LAPOP database and match it to geospatial data for visualizations. We would also recommend including different variables to see how the model reacts to being fed different demographics.
