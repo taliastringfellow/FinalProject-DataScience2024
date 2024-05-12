@@ -257,9 +257,10 @@ Workingdata <- Workingdata %>%
          income = q10inc,
          educ_attainment = edre,
          political_involvement = cp13,
-         community_involvement  =cp8, 
+         community_involvement=cp8, 
          country_num = pais,
-         household_members = q12cn)
+         household_members = q12cn,
+         migrating4educ = q14motan)
 
 
 SouthAmerica_only <- Workingdata %>% 
@@ -278,8 +279,29 @@ SouthAmerica_only <- Workingdata %>%
          | country_name == "Colombia")
 
 
-```
+Workingdata <- Workingdata %>% 
+  filter(country_num == 17) %>% #getting rid of US and Canada from dataset 
+  mutate(prov = case_when(
+    prov == 1702 ~ 1, #"CABA"
+    prov == 1706 ~ 1, #"Buenos Aires"
+    prov == 1714 ~ 1, #"Córdoba"
+    prov == 1718 ~ 4, #"Corrientes"
+    prov == 1722 ~ 4, #"Chaco"
+    prov == 1730 ~ 1, #"Entre Ríos"
+    prov == 1742 ~ 1, #"La Pampa"
+    prov == 1750 ~ 3, #"Mendoza" 
+    prov == 1758 ~ 2, #"Neuquén"
+    prov == 1762 ~ 2, #"Río Negro" 
+    prov == 1766 ~ 5, #"Salta"
+    prov == 1770 ~ 3, #"San Juan"
+    prov == 1178 ~ 1, #"Santa Fe"
+    prov == 1786 ~ 5, #"Santiago del Estero"
+    prov == 1790 ~ 5, #"Tucumán"
+    TRUE ~ NA 
+  ))
 
+#1 = centro, 2 = patagonia, 3 = Cuyo, 4= NEA, 5= NOA
+```
 
 ```{r}
 # Check for missing values
@@ -300,30 +322,30 @@ summary(Workingdata)
 #No Missing values found in the dataset
 
 ```
+
 We use Library missRanger for imputing missing values. The "ranger" package (Wright & Ziegler) is helpful to do fast missing value imputation by chained random forests, see Stekhoven & Buehlmann and Van Buuren & Groothuis-Oudshoorn. Between the iterative model fitting, it offers the option of predictive mean matching. This firstly avoids imputation with values not present in the original data (like a value 0.3334 in a 0-1 coded variable). Secondly, predictive mean matching tries to raise the variance in the resulting conditional distributions to a realistic level. This allows to do multiple imputation when repeating the call to missRanger().
 
-References
-1. Wright, M. N. & Ziegler, A. (2016). ranger: A Fast Implementation of Random Forests for
-High Dimensional Data in C++ and R. Journal of Statistical Software, in press. <arxiv.org/abs/1508.04409>.
-2. Stekhoven, D.J. and Buehlmann, P. (2012). ’MissForest - nonparametric missing value impu-
-tation for mixed-type data’, Bioinformatics, 28(1) 2012, 112-118. https://doi.org/10.1093/bioinformatics/btr597.
-3. Van Buuren, S., Groothuis-Oudshoorn, K. (2011). mice: Multivariate Imputation by Chained Equations in R. Journal of Statistical Software, 45(3), 1-67. http://www.jstatsoft.org/v45/i03/
-
+References 1. Wright, M. N. & Ziegler, A. (2016). ranger: A Fast Implementation of Random Forests for High Dimensional Data in C++ and R. Journal of Statistical Software, in press. \<arxiv.org/abs/1508.04409\>. 2. Stekhoven, D.J. and Buehlmann, P. (2012). ’MissForest - nonparametric missing value impu- tation for mixed-type data’, Bioinformatics, 28(1) 2012, 112-118. https://doi.org/10.1093/bioinformatics/btr597. 3. Van Buuren, S., Groothuis-Oudshoorn, K. (2011). mice: Multivariate Imputation by Chained Equations in R. Journal of Statistical Software, 45(3), 1-67. http://www.jstatsoft.org/v45/i03/
 
 ## 5. Data Analysis: using machine learning to predict attending to university in Argentina
 
-In this section, we focus on understanding the determinants of achieving university education in Argentina. A key feature of the Argentine superior education system is that the country has a public university system funded by the federal government to be "free" for students.
+In this section, we conduct unsupervised and supervised machine learning to understand the determinants of achieving university level in Argentina. We chose Argentina because its higher education system is a rara avis in the region: the public university system is tuition free for everyone. Given this feature, we would expect the system to be more progressive than those of other South American countries.
+
+To conduct the following analysis, we selected only socioeconomic variables within our data set, and transformed our indicator variable for having attended university into a factor variable.
 
 ## 5.1 Unsupervised Machine Learning
 
 ```{r}
 Argentinadata <- Workingdata %>% filter(country_num==17) #Choosing Argentina
 
-Argentinadata <- Argentinadata %>%  select(-country_name, -country_num, -university_factor)
+Argentinadata <- Argentinadata %>%  select(-country_name, -country_num, -university_factor,-migrating4educ)
 
 ```
 
-### Cluster Analysis 
+We conduct a cluster analysis searching for patterns within the data. We use a k-means model. The goal of k-means clustering is to partition a dataset into k distinct, non-overlapping clusters. To do so, the algorithm minimize the within-cluster variance, which is the sum of squared distances between each data point and its corresponding cluster centroid. The algorithm aims to find centroids that are centrally located within each cluster and to minimize the distance between data points and their assigned centroids.
+
+Once the algorithm converges, each data point belongs to the cluster with the nearest centroid. The resulting clusters are mutually exclusive and collectively exhaustive, meaning that each data point belongs to exactly one cluster, and all data points are assigned to a cluster.
+
 ```{r}
 set.seed(20201020)
 num_clusters <- 4
@@ -347,12 +369,15 @@ tidy(kmeans_model) %>%
   knitr::kable(digits = 2)
 
 # Plot the clusters
-plot(Argentinadata_with_clusters[, c("age", "educ_attainment")], 
+plot(Argentinadata_with_clusters[, c("age", "income")], 
      col = cluster_labels, pch = 19, main = "K-means Clustering", 
-     xlab = "Age", ylab = "Education Attainment")
-
+     xlab = "Age", ylab = "Income")
 
 ```
+
+K-means clustered the data into four groups according to their particular characteristics. Age seem to have the most clustering power. The model created four well-defined groups, organized around the means of 21, 33, 49 and 68, respectively. The following table presents the four groups and their means for each variable we use. In the subsequent diagram, we can observe no cluster variation across income categories.
+
+Using our cluster analysis, we now turn to Principal Component Analysis (PCA), a dimensionality reduction technique used to simplify the complexity of high-dimensional data while preserving most of its important structure. PCA identifies the directions (principal components) that capture the maximum variance in the data and projects the data onto these new orthogonal axes, thereby reducing overall data dimensionality.
 
 ```{r}
 # Perform PCA analysis
@@ -368,9 +393,12 @@ ggplot(pca_with_clusters, aes(x = Dim.1, y = Dim.2, color = factor(Cluster))) +
   theme_minimal()
 ```
 
-
+WRITE INTERPETATION
 
 ## 5.2 Supervised Machine Learning
+
+In this section we use three different machine learning techniques to predict whether a person will make it to university or not. We then compare them according to the pre-selected error metric and pick the best to test it against our testing dataset. Finally, we conduct a variance importance analysis to unveil the weights of each variable in the prediction decision.
+
 ```{r}
 Argentinadata <- Workingdata %>% filter(country_num==17) #Choosing Argentina
 
@@ -385,7 +413,7 @@ workingdata_train <- training(x = educ_split)
 workingdata_test <- testing(x = educ_split)
 ```
 
-## Come up with Models & Estimation
+### 1. Probit Classification model
 
 Building a **probit classififation model** with embedded regularization to quantify likelihood of making it to college based on our pre-defined predictors:
 
@@ -417,6 +445,7 @@ probit_fit_rs <- probit_wf %>%
   )
 ```
 
+### 2. Decision Tree
 Building a **decision tree** to quantify likelihood of making it to college based on our pre-defined predictors:
 
 ```{r}
@@ -432,7 +461,7 @@ tree_recipe <- recipe(formula = university_factor ~ ., data = workingdata_train)
 # Define the parameter grid
 param_grid <- expand.grid(
   min_n = c(2, 5, 10, 15),   
-  max_depth = c(2, 3, 4)
+  max_depth = c(3, 4, 5)
 )
 
 # Create a cart model object
@@ -474,6 +503,7 @@ rpart.plot::rpart.plot(x = best_tree_fit$fit)
 
 ```
 
+### 3. Probit Classification model
 Building a **random forest** to quantify likelihood of making it to college based on our pre-defined predictors:
 
 ```{r}
@@ -542,6 +572,7 @@ combined_metrics %>%
        title = "Model performance") +
   theme_minimal()
 ```
+
 **Decision Tree Model**
 
 -   **Accuracy**: The Decision Tree model's accuracy exhibits some variability, particularly towards the lower end, but it generally remains good, consistently above 70%. Despite some fluctuations, it maintains a respectable level of correctness in its predictions across different evaluations.
@@ -566,8 +597,7 @@ combined_metrics %>%
 
 -   **Recall**: The Probit model's recall performance is not as strong as other models. It might fail to capture as many positive instances as Random Forest or Decision Trees, indicating limitations in its ability to identify all relevant cases within the dataset.
 
-In a nutshell, the Random Forest model performed better in all the pre-selected evaluation metrics. In the nex section, we test it against out testing data. 
-
+In a nutshell, the Random Forest model performed better in all the pre-selected evaluation metrics. In the nex section, we test it against out testing data.
 
 ## Variable importance in the random forest model
 
@@ -610,4 +640,3 @@ test_metrics <- test_predictions %>%
 # View the test metrics
 print(test_metrics)
 ```
-
