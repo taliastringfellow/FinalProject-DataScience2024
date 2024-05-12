@@ -38,7 +38,7 @@ Duarte, E. C. P., Bertolini, A. M. P., & Januzzi, P. D. M. (2021). Color or Mone
 
 ## 2. Data Sources
 
-#### **⁠Americas Barometer** - LAPOP/ Vanderbilt University
+### **⁠Americas Barometer** - LAPOP/ Vanderbilt University
 
 The Americas Barometer is a periodic survey study of 34 countries in the Western Hemisphere, with stratified nationally representative samples drawn in each country, a common questionnaire core, and country-specific modules. It is the only scientifically rigorous comparative survey of democratic values and behaviors that covers all independent countries in North, Central, and South America, as well as a significant number of countries in the Caribbean. The Americas Barometer measures attitudes, evaluations, experiences, and behavior in the Americas using national probability samples of voting-age adults. This dataset contains all our variables of interest
 
@@ -420,7 +420,7 @@ In this section, we conduct unsupervised and supervised machine learning to unde
 
 To conduct the following analysis, we selected only socioeconomic variables within our data set, and transformed our indicator variable for having attended university into a factor variable.
 
-## 5.1 Unsupervised Machine Learning
+### 5.1 Unsupervised Machine Learning
 
 ```{r}
 Argentinadata <- Workingdata %>% filter(country_num==17) #Choosing Argentina
@@ -482,7 +482,7 @@ ggplot(pca_with_clusters, aes(x = Dim.1, y = Dim.2, color = factor(Cluster))) +
   theme_minimal()
 ```
 
-## 5.2 Supervised Machine Learning
+### 5.2 Supervised Machine Learning
 
 In this section we use three different machine learning techniques to predict whether a person will make it to university or not. We then compare them according to the pre-selected error metric and pick the best to test it against our testing dataset. Finally, we conduct a variance importance analysis to unveil the weights of each variable in the prediction decision.
 
@@ -500,7 +500,7 @@ workingdata_train <- training(x = educ_split)
 workingdata_test <- testing(x = educ_split)
 ```
 
-### 5.2.1. Probit Classification model
+### 5.2.a. Probit Classification model
 
 Building a **probit classification model** with embedded regularization to quantify likelihood of making it to college based on our pre-defined predictors. A probit model for classification, also known as a probit regression model, is a statistical model used to predict the probability that an observation belongs to a particular category or class. It is commonly employed in binary classification tasks, where the outcome variable is binary. In our case, our outcome variable takes on two values: 0 for "non-university", and 1 for "university".
 
@@ -535,7 +535,7 @@ probit_fit_rs <- probit_wf %>%
   )
 ```
 
-### 5.2.2. Decision Tree
+### 5.2.b. Decision Tree
 
 Building a **decision tree** to quantify likelihood of making it to college based on our pre-defined predictors. A decision tree for classification is a predictive modeling algorithm used for solving classification problems, where the goal is to assign input data points to one of two or more predefined classes or categories.
 
@@ -598,7 +598,7 @@ rpart.plot::rpart.plot(x = best_tree_fit$fit)
 
 ```
 
-### 5.2.3. Random Forest Classification model
+### 5.2.c. Random Forest Classification model
 
 Building a **random forest** to quantify likelihood of making it to college based on our pre-defined predictors. A random forest for classification is an ensemble learning method used for classification tasks. It builds multiple decision trees during training and outputs the class that is the mode of the classes (classification) or mean prediction (regression) of the individual trees. Each tree in the random forest is trained on a random subset of the training data, and a random subset of features is considered for each split in the tree. This randomness helps to decorrelate the trees and reduce overfitting.
 
@@ -637,7 +637,7 @@ rf_fit_rs <- rf_wf %>%
 
 ```
 
-### 5.2.4 Models' Performance
+### 5.3 Models' Performance
 
 To evaluate the models' performance, we selected three metrcis:
 
@@ -685,7 +685,7 @@ combined_metrics %>%
 
 Both Probit and Random Forest models have an average precision performance of around .76, meaning that they accurately predict 76% of total positives observations. In terms of accuracy and recall, the Probit model does slightly better. However, because we are already familiar with Probit models for causal inference, for pedagogical reasons we choose to further investigate and test the Random Forest model.
 
-## 5.2.4.1. Variable importance in the random forest model
+### 5.4.a Variable importance in the random forest model
 
 Variable importance analysis is a method used to assess the contribution of each input variable (feature) to the model's predictive performance. It helps identify which variables have the most significant impact on the model's ability to make accurate predictions.
 
@@ -710,7 +710,7 @@ print(var_importance_plot)
 
 ```
 
-## 5.2.1 Implementation of a Random Forest
+### 5.4.b. Implementation of a Random Forest
 
 In this section we test our Random Forest model in our testing data set, to evaluate its prediction power for unknown observations. This step is particularly relevant to assess whether the model suffers from overfitting, meaning it is extermely good with the data it was train on (capturing every nuances), but lacks prediction power when applied to unknown data.
 
@@ -740,3 +740,19 @@ print(test_metrics)
 ```
 
 ## 6. Discussion of Results
+
+### 6.1 Interpretation 
+
+
+### 6.2 Limitation
+
+One limitation to our research is that our models focus on one country in Latin America: Argentina, thus the external validity or larger applicability of these models will need to be adjusted to account for variations found across neighboring countries. Indeed, accessibility of school, income distributions, ethnicity demographics, and cultural norms very likely will impact the findings of the model by countries. Moreover, the ‘best’ model could also change depending on the country and the corresponding data used, as would be expected. 
+
+### 6.3 Future Reserach Suggestions 
+
+We recommend that future researchers start first by scaling the model to other countries in the region then to all of South America. Of course, this research must be conduct using best practices of modeling including resampling and hyper parameter tuning. It is essential that future researchers standardize income across countries before scaling to the whole continent, and have relatively consistent variability across the indicator variables within the unsupervised learning model. The relative variability among countries could then be observed to see how different demographic characteristics play larger or smaller roles.
+
+This LAPOP dataset is unique in that it captures ethnicity beyond just a categorized box checking system often normalized in demographic research. Indeed, researchers also asked the survey participants to self-identify skin tone coloring on a scale of 1-11 (lightest to darkest) and subsequently had the surveyor themselves categorize the participant. This allows for a more nuanced investigation of how perceived racial differences have influence on individuals life outcomes. 
+
+Future researchers could also do a regional investigation on how different variables affect regional educational outcomes within a country. To do so, they would need to see the labels associated with each administrative level within the LAPOP database and match it to geospatial data for visualizations. We would also recommend including different variables to see how the model reacts to being fed different demographics. Finally, the weighting of the survey is something to dive deeper into if one wanted to expand on this project. 
+
