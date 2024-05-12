@@ -42,11 +42,13 @@ Duarte, E. C. P., Bertolini, A. M. P., & Januzzi, P. D. M. (2021). Color or Mone
 
 The Americas Barometer is a periodic survey study of 34 countries in the Western Hemisphere, with stratified nationally representative samples drawn in each country, a common questionnaire core, and country-specific modules. It is the only scientifically rigorous comparative survey of democratic values and behaviors that covers all independent countries in North, Central, and South America, as well as a significant number of countries in the Caribbean. The Americas Barometer measures attitudes, evaluations, experiences, and behavior in the Americas using national probability samples of voting-age adults. This dataset contains all our variables of interest
 
+This LAPOP dataset is unique in that it captures ethnicity beyond just a categorized box checking system often normalized in demographic research. Indeed, researchers also asked the survey participants to self-identify skin tone coloring on a scale of 1-11 (lightest to darkest) and subsequently had the surveyor themselves categorize the participant. This allows for a more nuanced investigation of how perceived racial differences have influence on individuals life outcomes. 
+
 The AmericasBarometer by the LAPOP Lab, www.vanderbilt.edu/lapop
 
 ### **Rgeoboundaries** - Runfola et al, 2020
 
-For the geospatial analysis, we use data from rgeoboundaries. It contains political administrative boundaries for the globe as they were by 2020. Since South America hasn not experienced boundaries changes in 21st century, we use the dataset as it is, just adjusting the scope to the subcontinent.
+For the geospatial analysis, we use data from rgeoboundaries. It contains political administrative boundaries for the globe as they were by 2020. Since South America has not experienced boundaries changes in 21st century, we use the dataset as it is, just adjusting the scope to the subcontinent.
 
 Runfola D, Anderson A, Baier H, Crittenden M, Dowker E, Fuhrig S, et al. (2020) geoBoundaries: A global database of political administrative boundaries. PLoS ONE 15(4): e0231866. https://doi.org/10.1371/journal.pone.0231866
 
@@ -392,7 +394,13 @@ Workingdata <- Workingdata %>%
 
 **Missing Values Assessment** We use Library missRanger for imputing missing values. The "ranger" package (Wright & Ziegler) is helpful to do fast missing value imputation by chained random forests, see Stekhoven & Buehlmann and Van Buuren & Groothuis-Oudshoorn. Between the iterative model fitting, it offers the option of predictive mean matching. This firstly avoids imputation with values not present in the original data (like a value 0.3334 in a 0-1 coded variable). Secondly, predictive mean matching tries to raise the variance in the resulting conditional distributions to a realistic level. This allows to do multiple imputation when repeating the call to missRanger().
 
-References 1. Wright, M. N. & Ziegler, A. (2016). ranger: A Fast Implementation of Random Forests for High Dimensional Data in C++ and R. Journal of Statistical Software, in press. \<arxiv.org/abs/1508.04409\>. 2. Stekhoven, D.J. and Buehlmann, P. (2012). ’MissForest - nonparametric missing value impu- tation for mixed-type data’, Bioinformatics, 28(1) 2012, 112-118. https://doi.org/10.1093/bioinformatics/btr597. 3. Van Buuren, S., Groothuis-Oudshoorn, K. (2011). mice: Multivariate Imputation by Chained Equations in R. Journal of Statistical Software, 45(3), 1-67. http://www.jstatsoft.org/v45/i03/
+### References 
+
+1. Wright, M. N. & Ziegler, A. (2016). ranger: A Fast Implementation of Random Forests for High Dimensional Data in C++ and R. Journal of Statistical Software, in press. \<arxiv.org/abs/1508.04409\>. 
+
+2. Stekhoven, D.J. and Buehlmann, P. (2012). ’MissForest - nonparametric missing value impu- tation for mixed-type data’, Bioinformatics, 28(1) 2012, 112-118. https://doi.org/10.1093/bioinformatics/btr597. 
+
+3. Van Buuren, S., Groothuis-Oudshoorn, K. (2011). mice: Multivariate Imputation by Chained Equations in R. Journal of Statistical Software, 45(3), 1-67. http://www.jstatsoft.org/v45/i03/
 
 ```{r}
 missing_values <- sum(is.na(Workingdata))
@@ -413,6 +421,370 @@ summary(Workingdata)
 ```
 
 ## 4. Exploratory Analysis: higher education in South America
+
+### Geospatial data upload 
+```{r}
+
+data("world")
+
+sa_all_mapping <- world %>%
+  filter(continent == "South America") 
+
+#need to take out countries that are not in the other datasets: Falkland Islands, Venezuela, Guyana, French Guiana 
+sa_mapping <- sa_all_mapping %>%
+  filter(name_long != "Falkland Islands" & name_long != "Venezuela" & name_long != "Guyana")
+
+#province level data for each country 
+geoboundaries <- gb_adm1() %>%
+  filter(shapeGroup %in% c("ARG", "COL", "BRA", "URY", "CHL", "VEN", "PRY", "PER", "ECU", "SUR", "GUY", "GUF", "BOL")) 
+
+
+#Argentina province level data
+arg <- gb_adm1("ARG")
+
+#mapping argentina 
+plot(st_geometry(arg),
+     col = rgb(red = 1, green = 0, blue = 0, alpha = 0.5),
+     axes = TRUE, graticule = TRUE)
+
+#exploring other geospatial data on south america 
+library(remotes)
+remotes::install_github("wmgeolab/rgeoboundaries")
+library(rgeoboundaries)
+
+#Pulling Argentina specific data 
+Argentina <- geoboundaries(
+     country = "Argentina",
+     adm_lvl = "adm1",
+     type = "simplified") 
+Argentina <- geoboundaries(
+     country = "Argentina",
+     adm_lvl = "adm1",
+     type = "simplified") 
+ 
+
+#mapping south america by population 
+pop_geom <- sa_all_mapping %>%
+  ggplot() +
+  geom_sf(aes(fill=pop/10^6), color = "brown", size = 0.1) +
+  ggrepel::geom_label_repel(aes(label = name_long, geometry = geom),
+    stat = "sf_coordinates",
+    min.segment.length = 0,
+    size = 3,
+    color = "black") + 
+  scale_fill_continuous_sequential(palette= "Heat 2")+
+    labs(title = "Population by Country\nin Millions of Inhabitants", fill= "Pop.\n(in millions)")+
+  theme_void() +
+    theme(legend.title=element_text(size=9), 
+          plot.title = element_text(face = "bold", hjust = 0.5),
+          plot.title.position = "plot")
+
+
+#mapping South America by Life Expectancy 
+le_geom <- sa_all_mapping %>%
+  ggplot()+
+  geom_sf(aes(fill = lifeExp), color = "brown", size = 0.1) +
+  ggrepel::geom_label_repel(aes(label = round(lifeExp),2, geometry = geom),
+    stat = "sf_coordinates",
+    min.segment.length = 0,
+    size = 3,
+    color = "black") + 
+  scale_fill_continuous_sequential(palette= "Heat 2")+
+  labs(title = "Average Life Expenctancy by Country", fill = "Life Expectancy\n(in years)") +
+  theme_void() +
+    theme(legend.title=element_text(size=9),
+          plot.title = element_text(face = "bold", hjust = 0.5),
+          plot.text = element_text(face = "bold"),
+          plot.title.position = "plot")
+
+#side by side:
+pop_geom + le_geom 
+
+
+```
+
+Here we are conducting some basic analysis of how South America maps given basic country level statistics. We see that Chile stands out with the highest life expectancy and somewhat smaller relative population. Brazil has the largest population by far with over 200 million people and has the median south American life expectancy of 75 years. 
+
+Please note this is not data from the LAPOP survey data, but rather best estimates of the true population size and life expectancy based on census / larger scale data from the geoboundaries Rpackage. 
+
+```{r}
+#Investigating age distributions by country visually 
+SouthAmerica_only %>%
+  ggplot(aes(age, fill = country_name)) +
+  geom_bar() +
+  facet_wrap(~country_name, scales = "free") +
+  labs(fill = "Country Name", title = "Age distribution of Data by Country", x = "Age (years)", y = "Count from Survey") +
+  theme_minimal() +
+    theme(legend.title=element_text(size=9),
+          plot.title = element_text(face = "bold", hjust = 0.5),
+          plot.title.position = "plot")
+```
+Based on this survey data, we observe that most South American countries have relatively young population pyramids, with a demographic dividend estimated break even around 2035. Uruguay stands out as a country with a somewhat evenly distributed age distribution and with the most elderly people surveyed.
+
+```{r}
+#seeing how much of our data set has considered emigrating for educational attainment purposes (very low at less than 1%)
+
+SouthAmerica_only %>%
+  filter(q14 == 1)%>%
+  summarise(mean(leave4educ))
+
+```
+
+Part of the survey was asking respondents "And what is the most important reason why you have thought about emigrating?" with the option of "Lack of educational opportunities". We observe that of the people that responded yes to wanting to emigrate in the next 3 years, only a very small portion (0.4%) of the surveyed population noted it as a cause for emigration. Leading us to believe that lack of educational opportunities within one's home country is not a main driver of educational access.  
+
+### Transforming Ethnicity Results of Survey to Country Level 
+```{r}
+#creating table that counts the ethnicity breakout by country 
+countryxeth_tbl <- SouthAmerica_only %>%
+  group_by(country_name, ethnicity) %>%
+  count(ethnicity) %>%
+  pivot_wider(names_from = ethnicity, values_from = n) %>%
+  ungroup()
+
+countrylevel_eth_df <- as.data.frame(countryxeth_tbl)
+
+#replacing missing values with zero
+countrylevel_eth_df <- within(countrylevel_eth_df, {
+  `2` <- replace(`2`, is.na(`2`), 0)
+  `3` <- replace(`3`, is.na(`3`), 0)
+  `5` <- replace(`5`, is.na(`5`), 0)
+})
+
+#create a total column 
+countrylevel_eth_df$total_pop <- rowSums(countrylevel_eth_df[, c('1', '2', '3', '4', '5', '7', 'NA')])
+
+countrylevel_eth_df
+```
+
+```{r}
+#create a proportions ethnicity df out of the raw data 
+eth_proportions_df <- countrylevel_eth_df %>%
+  group_by(country_name) %>%
+  mutate("1" = `1` / total_pop *100,
+         "2"= `2` / total_pop *100,
+         "3" = `3` / total_pop *100,
+         "4" = `4` / total_pop *100,
+         "5"= `5` / total_pop *100,
+         "7" = `7` / total_pop *100,
+         "NA" = `NA` / total_pop *100) %>%
+  ungroup()
+
+eth_proportions_df
+#data not showing 3 countries: Venezuela, Guyana, French Guiana
+
+#Pivoting the ethnicity proportions longer so that I can interpret with bargraphs 
+eth_prop_df_long <-eth_proportions_df %>%
+  select(-total_pop) %>%
+  pivot_longer(!country_name, names_to = "ethnicity", values_to = "percent")
+
+#adding ethnicity labels to dataframe 
+eth_prop_df_long <- eth_prop_df_long %>%
+  mutate(eth_lab = case_when(
+    ethnicity == 1 ~ "White",
+    ethnicity == 2 ~ "Mestizo",
+    ethnicity == 3 ~ "Indigenous",
+    ethnicity == 4 ~ "Mulata",
+    ethnicity == 5 ~ "Black",
+    ethnicity == 7 ~ "Other",
+    is.na(ethnicity) ~ "No Data"
+  ))
+
+eth_prop_df_long 
+
+#creating a bar graph with the ethnicity proportions 
+eth_prop_bargraph <- eth_prop_df_long %>%
+  ggplot(aes(x = country_name, y = percent, fill = eth_lab)) +
+  geom_bar(position = position_fill(reverse = TRUE), stat = "identity") +
+  labs(title = "Ethnicity Category as Proportion by Country", caption = "From Representative sample from LAPOP in 2023", y = "Percent", x = "Country", fill = "Ethnicity") +
+  scale_fill_brewer(palette = "BrBG", na.value = "orange")+ 
+  theme_minimal() +
+  theme(legend.title=element_text(face = "bold"),
+        plot.title = element_text(face = "bold", hjust = 0.5),
+        plot.caption = element_text(face = "italic", hjust = 0.5),
+        plot.title.position = "plot")
+
+#use scales - categorical variable - fill manual and set colors with palette 
+#scale_fill_manual (vector with categories, colors with hex codes)
+
+```
+
+### Transforming Educational Attainment Results of Survey to Country Level 
+```{r}
+#creating table that counts the education breakout by country 
+countryxeduc_tbl <- SouthAmerica_only %>%
+  group_by(country_name, educ_attainment) %>%
+  count(educ_attainment) %>%
+  pivot_wider(names_from = educ_attainment, values_from = n) %>%
+  ungroup()
+
+countryxeduc_tbl
+
+#replacing missing values with zero
+countryxeduc_tbl <- within(countryxeduc_tbl, {
+  `NA` <- replace(`NA`, is.na(`NA`), 0)
+})
+
+#creating a total without NA column
+countryxeduc_tbl$total_pop_noNA <- rowSums(countryxeduc_tbl[, c('0', '1', '2', '3', '4', '5', '6')])
+
+#create a total column with NA
+countryxeduc_tbl$total_pop_withNA <- rowSums(countryxeduc_tbl[, c('0', '1', '2', '3', '4', '5', '6', 'NA')])
+
+countryxeduc_tbl
+
+#create a proportions ethnicity df out of the raw data 
+educ_proportions_df <- countryxeduc_tbl %>%
+  group_by(country_name) %>%
+  mutate("0" = `0` / total_pop_withNA *100,
+         "1" = `1` / total_pop_withNA *100,
+         "2"= `2` / total_pop_withNA *100,
+         "3" = `3` / total_pop_withNA *100,
+         "4" = `4` / total_pop_withNA *100,
+         "5"= `5` / total_pop_withNA *100,
+         "6" = `6` / total_pop_withNA *100,
+         "NA" = `NA` / total_pop_withNA *100) %>%
+  ungroup()
+
+educ_proportions_df
+#data not showing 3 countries: Venezuela, Guyana, French Guiana
+
+#prepping education proportions df for graphing 
+educ_prop_df_long <-educ_proportions_df %>%
+  select(-total_pop_noNA, -total_pop_withNA) 
+
+educ_prop_df_long  
+#Pivoting the ethnicity proportions longer so that I can interpret with bargraphs 
+educ_prop_df_long <-educ_prop_df_long %>%
+  pivot_longer(!country_name, names_to = "educ_score", values_to = "percent")
+
+#adding labels for education 
+educ_prop_df_long <- educ_prop_df_long %>%
+  mutate(educ_lab = case_when(
+    educ_score == 0 ~ "None",
+    educ_score == 1 ~ "Primary School Incomplete",
+    educ_score == 2 ~ "Primary School Complete",
+    educ_score == 3 ~ "High-school Incomplete",
+    educ_score == 4 ~ "High-school Complete",
+    educ_score == 5 ~ "Tertiary/University Incomplete",
+    educ_score == 6 ~ "Tertiary/University Complete",
+    is.na(educ_score) ~ "No Data"
+  ))
+  
+  
+  #educ_lab = factor(educ_lab, levels = c("None", "Primary School Incomplete", "Primary School Complete", "High-school Incomplete", "High-school Complete", "Tertiary/University Incomplete", "Tertiary/University Complete", "No Data")))
+
+educ_prop_df_long 
+
+#creating a bar graph with the ethnicity proportions 
+educ_prop_bargraph <- educ_prop_df_long %>%
+  ggplot(aes(x = country_name, y= percent, fill = educ_score)) +
+  geom_bar(position = position_fill(reverse = TRUE), stat="identity") + 
+  labs(title = "Educational Outcome Distribution by Country", caption = "From Representative sample from LAPOP in 2023\n 'Pri Sch' means Primary School, 'HS' stands for High School,\n'Uni' stands for University, 'Inc' & 'Comp' stands for in/complete", 
+       fill = "Educ level\n(categorical)", y = "Percent", x = "Country") +
+  scale_fill_manual(labels = 
+                        c("None", "Pri Sch Inc.", "Pri Sch Comp.", 
+                          "HS Inc.", "HS Comp.", 
+                          "Uni Inc.", "Uni Comp.", "No Data"), values = c("#C2E6C7", "#9FD99E", "#7BC47F", "#4CAF50", "#388E3C", "#2E7D32", "#1B5E20", "#333333")) +
+  theme_minimal() +
+  theme(legend.title=element_text(face = "bold"),
+        plot.title = element_text(face = "bold", hjust = 0.5),
+        plot.caption = element_text(face = "italic", hjust = 0.5),
+        plot.title.position = "plot")
+
+#putting the graphs on top of each other 
+(eth_prop_bargraph / educ_prop_bargraph) + plot_layout(nrow = 2, heights = c(1, 1))
+```
+
+
+```{r}
+#finding mean educational outcome by country
+countryxeduc_tbl <- countryxeduc_tbl %>%
+  group_by(country_name) %>%
+  mutate(mean_education = (0*`0` + 1*`1` + 2*`2` + 3*`3`+ 4*`4` + 5*`5` + 6*`6`)/total_pop_noNA) 
+
+#adding mean education outcome to our geospatial data (sa_mapping)
+#ONLY RUN THIS CODE ONCE! 
+sa_mapping <- sa_mapping %>%
+  left_join(countryxeduc_tbl, by = c("name_long" = "country_name")) %>%
+  select(-matches("\\d+"), -`NA`)
+
+#renameing total pop because it's the survey population not the real population! 
+sa_mapping <- sa_mapping %>%
+  rename(survey_total_noNA = total_pop_noNA) %>%
+  rename(survey_total_withNA = total_pop_withNA)
+
+#Visualizing the Mean population outcomes 
+#mapping South America by mean educational outcome 
+educ_geom <-sa_mapping %>%
+  ggplot()+
+  geom_sf(aes(fill = mean_education), color = "white", size = 0.1) +
+   ggrepel::geom_label_repel(aes(label = round((mean_education),2), geometry = geom),
+    stat = "sf_coordinates",
+    min.segment.length = 0,
+    size = 3,
+    color = "black") + 
+  scale_fill_gradient(name = "Avg. Educ\non scale of \n0 to 6", 
+                      low = "#C0D8FD", high = "#0F6CFC") +
+  labs(title = "Average Educational Outcome \nin South America", subtitle = "using representative data", caption = "Education is categorized based on an increasing \neducational achievement. Variables are coded as follows:\nNone = 0,\nPrimary School Incomplete = 1\nPrimary School Complete = 2\nHigh-school Incomplete = 3\nHigh-school Complete = 4\nTertiary/University Incomplete = 5\nTertiary/University Complete = 6") +
+  theme_void() +
+  theme(plot.caption = element_text(face = "italic", hjust = 0, size =7),
+        legend.title = element_text(size =9),
+        plot.title = element_text(face = "bold", hjust = 0.5),
+        plot.subtitle = element_text(face = "italic", hjust = 0.5, size = 8),
+        plot.title.position = "plot")
+
+
+#mapping South America by GDP per Capita 
+gdp_geom <- sa_mapping %>%
+  ggplot()+
+  geom_sf(aes(fill = gdpPercap), color = "white", size = 0.1) +
+  scale_fill_gradient(name = "GDP\n(per Capita)", 
+                      low = "#C0D8FD", high = "#0F6CFC",
+                      labels = scales::dollar)+
+  labs(title = "GDP per Capita \nin South America", caption = "Findings from representative\nsurvey data 'LAPOP' 2023") +
+  theme_void() +
+  theme(legend.title=element_text(size =9),
+        plot.title = element_text(face = "bold", hjust = 0.5),
+        plot.caption = element_text(face = "italic", hjust = 0.5, size =7),
+        plot.title.position = "plot")
+
+#side by side:
+educ_geom + gdp_geom 
+
+```
+
+```{r}
+#creating table that counts education breakout by ethnicity 
+educxeth_tbl <- SouthAmerica_only %>%
+  group_by(ethnicity, educ_attainment) %>%
+  count(educ_attainment) %>%
+  pivot_wider(names_from = ethnicity, values_from = n) %>%
+  ungroup()
+
+educxeth_tbl
+
+#making data factors:
+SouthAmerica_only <- SouthAmerica_only %>%
+  mutate_at(vars(-age, -income), as.factor)
+
+```
+
+```{r}
+skincolor <- c("#fff5f6", "#f5e2dc", "#e9c1b7", "#e7c9a5", "#c0a280", "#9d7c53", "#85674f", "#70503b", "#523c2f", "#422811", "#383127")
+skincodes <- c(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11)
+skincolorpalette <- tibble(skincodes, skincolor)
+
+ggplot(SouthAmerica_only, aes(x = factor(skin_color))) +
+  geom_bar(aes(fill = factor(skin_color))) +  # Fill mapped to colorr
+  scale_fill_manual(values = skincolor) +
+  labs(title = "Self-reported skin color", x = "Skin color (from lighter to darker)", y = "Number of Individuals from the sample", fill="Skin Color", caption = "Findings from representative survey data 'LAPOP' 2023,\nrespondents where asked to self-report their skin color.")+
+  theme_minimal() +
+  theme(legend.title=element_text(size =9),
+        plot.title = element_text(face = "bold", hjust = 0.5),
+        plot.caption = element_text(face = "italic", hjust = 0.5, size =7),
+        plot.title.position = "plot")
+
+```
 
 ## 5. Data Analysis: using machine learning to predict attending to university in Argentina
 
@@ -712,10 +1084,6 @@ print(var_importance_plot)
 
 ### 5.4.b. Implementation of a Random Forest
 
-In this section we test our Random Forest model in our testing data set, to evaluate its prediction power for unknown observations. This step is particularly relevant to assess whether the model suffers from overfitting, meaning it is extermely good with the data it was train on (capturing every nuances), but lacks prediction power when applied to unknown data.
-
-Our model has an accuracy rate of .74, meaning that it accurately predicts 74% of the total observed values (both positives and negatives). This is consistent with the performance statistics we obtained in section 5.2.4, and indicates the model does not overfit the data.
-
 ```{r}
 # Preprocess the test dataset using the recipe
 test_processed <- rf_recipe %>%
@@ -738,11 +1106,18 @@ test_metrics <- test_predictions %>%
 # View the test metrics
 print(test_metrics)
 ```
+In this section we test our Random Forest model in our testing data set, to evaluate its prediction power for unknown observations. This step is particularly relevant to assess whether the model suffers from overfitting, meaning it is extermely good with the data it was train on (capturing every nuances), but lacks prediction power when applied to unknown data.
+
+Our model has an accuracy rate of .75, meaning that it accurately predicts 75% of the total observed values (both positives and negatives). This is consistent with the performance statistics we obtained in section 5.3, and indicates the model does not overfit the data.
 
 ## 6. Discussion of Results
 
 ### 6.1 Interpretation 
+Descriptive statistics
 
+Random Forest
+
+Why is this important for policy 
 
 ### 6.2 Limitation
 
@@ -751,8 +1126,6 @@ One limitation to our research is that our models focus on one country in Latin 
 ### 6.3 Future Reserach Suggestions 
 
 We recommend that future researchers start first by scaling the model to other countries in the region then to all of South America. Of course, this research must be conduct using best practices of modeling including resampling and hyper parameter tuning. It is essential that future researchers standardize income across countries before scaling to the whole continent, and have relatively consistent variability across the indicator variables within the unsupervised learning model. The relative variability among countries could then be observed to see how different demographic characteristics play larger or smaller roles.
-
-This LAPOP dataset is unique in that it captures ethnicity beyond just a categorized box checking system often normalized in demographic research. Indeed, researchers also asked the survey participants to self-identify skin tone coloring on a scale of 1-11 (lightest to darkest) and subsequently had the surveyor themselves categorize the participant. This allows for a more nuanced investigation of how perceived racial differences have influence on individuals life outcomes. 
 
 Future researchers could also do a regional investigation on how different variables affect regional educational outcomes within a country. To do so, they would need to see the labels associated with each administrative level within the LAPOP database and match it to geospatial data for visualizations. We would also recommend including different variables to see how the model reacts to being fed different demographics. Finally, the weighting of the survey is something to dive deeper into if one wanted to expand on this project. 
 
