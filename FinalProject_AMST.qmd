@@ -31,6 +31,50 @@ Runfola D, Anderson A, Baier H, Crittenden M, Dowker E, Fuhrig S, et al. (2020) 
 
 ## 3. Data Wrangling
 
+**Libraries**
+
+```{r}
+library(tidyverse)
+library(tidymodels)
+library(recipes)
+library(ggplot2)
+library(ggrepel)
+library(patchwork)
+library(tidyclust)
+library(dplyr)
+library(themis)
+library(haven)
+library(rpart)
+library(lubridate)
+library(archive)
+library(utils)
+library(tigris)
+library(sf)
+library(geodata)
+library(rnaturalearth)
+library(mapview)
+library(textrecipes) 
+library(vip)
+library(here)
+library(glmnet)
+library(ranger)
+library(rsample)
+library(parsnip)
+library(workflows)
+library(tune)
+library(yardstick)
+library(rgeoboundaries)
+library(readxl)
+library(scales)
+library(geobr)
+library(spData)
+library(colorspace)
+library(missRanger)
+library(vip)
+library(ggfortify) 
+library(FactoMineR) 
+```
+
 **Read in Data**
 
 ```{r}
