@@ -474,9 +474,9 @@ probit_fit_rs <- probit_wf %>%
 
 Building a **decision tree** to quantify likelihood of making it to college based on our pre-defined predictors. A decision tree for classification is a predictive modeling algorithm used for solving classification problems, where the goal is to assign input data points to one of two or more predefined classes or categories.
 
-Decision trees recursively partition the feature space into subsets, making decisions based on the values of input features. For this model, we conducted hyperparameter tunning, creating a combination of different trees with the folowwing features: i) we restricted the minimum number per node to 2, 5, 10, and 15; ii) we restricted the maximum depth of the trees to 3, 4, and 5. Then, the algortihm chooses the "best tree", taking into account the relevant metrics we are interested in, precision (see the Models Performance section for more information on this).
+Decision trees recursively partition the feature space into subsets, making decisions based on the values of input features. For this model, we conducted hyperparameter tuning, creating a combination of different trees with the following features: i) we restricted the minimum number per node to 2, 5, 10, and 15; ii) we restricted the maximum depth of the trees to 3, 4, and 5. Then, the algortihm chooses the "best tree", taking into account the relevant metrics we are interested in, precision (see the Models Performance section for more information on this).
 
-Our best tree has 7 layers and 10 nodes. In a nuthsell, our decision tree shows that people with a high probability of going to university share some common features: they have mostly formal jobs, are mostly males, and with incomes higher than \$97,000 monthly pesos. See the following image for a detailed assessment of each node's probabilities.
+Our best tree has 7 layers and 10 nodes. In a nutshell, our decision tree shows that people with a high probability of going to university share some common features: they have mostly formal jobs, are mostly males, and with incomes higher than \$97,000 monthly pesos. See the following image for a detailed assessment of each node's probabilities.
 
 ```{r}
 set.seed(20201020)
