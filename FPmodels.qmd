@@ -278,7 +278,7 @@ SouthAmerica_only <- Workingdata %>%
          | country_name == "Venezuela" 
          | country_name == "Colombia")
 
-
+#Coding Argentine regions
 Workingdata <- Workingdata %>% 
   filter(country_num == 17) %>% #getting rid of US and Canada from dataset 
   mutate(prov = case_when(
@@ -379,6 +379,8 @@ K-means clustered the data into four groups according to their particular charac
 
 Using our cluster analysis, we now turn to Principal Component Analysis (PCA), a dimensionality reduction technique used to simplify the complexity of high-dimensional data while preserving most of its important structure. PCA identifies the directions (principal components) that capture the maximum variance in the data and projects the data onto these new orthogonal axes, thereby reducing overall data dimensionality.
 
+In this case, PCA built upon the previously conducted k-means, meaning it kept the four clusters. In the following diagram, we can observe the distribution of the clusters along the 2 PCs. It's difficult to distinguish the variables that the PCs are reflecting. However, given that k-means built the clusters around age, we can guess that PC2 is reflecting a mix of age and other variables. The distribution across PC1 is also hard to see, but there is a clear pattern: clusters 1 and 2 are organized around two different lines with negatives slopes, whereas clusters 3 and 4 don't present a well-defined distribution. 
+
 ```{r}
 # Perform PCA analysis
 pca_result <- PCA(Argentinadata, graph = FALSE)
@@ -392,8 +394,6 @@ ggplot(pca_with_clusters, aes(x = Dim.1, y = Dim.2, color = factor(Cluster))) +
   labs(title = "PCA with K-means Clustering", x = "PC1", y = "PC2", color = "Cluster") +
   theme_minimal()
 ```
-
-WRITE INTERPETATION
 
 ## 5.2 Supervised Machine Learning
 
@@ -413,11 +413,15 @@ workingdata_train <- training(x = educ_split)
 workingdata_test <- testing(x = educ_split)
 ```
 
-### 1. Probit Classification model
+### 5.2.1. Probit Classification model
 
-Building a **probit classififation model** with embedded regularization to quantify likelihood of making it to college based on our pre-defined predictors:
+Building a **probit classififation model** with embedded regularization to quantify likelihood of making it to college based on our pre-defined predictors. A probit model for classification, also known as a probit regression model, is a statistical model used to predict the probability that an observation belongs to a particular category or class. It is commonly employed in binary classification tasks, where the outcome variable is binary. In our case, our outcome variable takes on two values: 0 for "non-university", and 1 for "university". 
+
+In a probit classification model, the relationship between the predictors (independent variables) and the binary outcome variable is modeled using the cumulative distribution function (CDF) of the standard normal distribution, also known as the probit function. This function transforms a linear combination of the predictor variables into a probability, which represents the probability of the outcome belonging to one of the categories.
 
 ```{r}
+set.seed(20201020)
+
 # Create a recipe
 probit_recipe <- recipe(formula = university_factor ~ ., data = workingdata_train) %>%
     step_normalize(all_numeric_predictors()) %>%
@@ -435,7 +439,6 @@ probit_wf <- workflow() %>%
 # Set folds for cross-validation
 folds <- vfold_cv(data = workingdata_train, v = 10)
 
-set.seed(20201020)
 # Fitting probit model using v-fold resampling method
 probit_fit_rs <- probit_wf %>%
   fit_resamples(
@@ -445,8 +448,12 @@ probit_fit_rs <- probit_wf %>%
   )
 ```
 
-### 2. Decision Tree
-Building a **decision tree** to quantify likelihood of making it to college based on our pre-defined predictors:
+### 5.2.2. Decision Tree
+Building a **decision tree** to quantify likelihood of making it to college based on our pre-defined predictors. A decision tree for classification is a predictive modeling algorithm used for solving classification problems, where the goal is to assign input data points to one of two or more predefined classes or categories. 
+
+Decision trees recursively partition the feature space into subsets, making decisions based on the values of input features. For this model, we conducted hyperparameter tunning, creating a combination of different trees with the folowwing features: i) we restricted the minimum number per node to 2, 5, 10, and 15; ii) we restricted the maximum depth of the trees to 3, 4, and 5. Then, the algortihm chooses the "best tree", taking into account the relevant metrics we are interested in, precision (see the Models Performance section for more information on this). 
+
+Our best tree has 7 layers and 10 nodes. In a nuthsell, our decision tree shows that people with a high probability of going to university share some common features: they have mostly formal jobs, are mostly males, and with incomes higher than $97,000 monthly pesos. See the following image for a detailed assessment of each node's probabilities. 
 
 ```{r}
 set.seed(20201020)
@@ -461,7 +468,7 @@ tree_recipe <- recipe(formula = university_factor ~ ., data = workingdata_train)
 # Define the parameter grid
 param_grid <- expand.grid(
   min_n = c(2, 5, 10, 15),   
-  max_depth = c(3, 4, 5)
+  max_depth = c(3, 5, 7)
 )
 
 # Create a cart model object
@@ -486,7 +493,7 @@ tree_tune <- tree_wf %>%
 
 # Extract the best tuning parameters
 best_params <- tree_tune %>%
-  select_best(metric = "accuracy")
+  select_best(metric = "precision")
 
 # Create a new tree model with the best parameters
 best_tree_model <- lapop_tree %>%
@@ -503,8 +510,12 @@ rpart.plot::rpart.plot(x = best_tree_fit$fit)
 
 ```
 
-### 3. Probit Classification model
-Building a **random forest** to quantify likelihood of making it to college based on our pre-defined predictors:
+### 5.2.3. Random Forest Classification model
+Building a **random forest** to quantify likelihood of making it to college based on our pre-defined predictors. A random forest for classification is an ensemble learning method used for classification tasks. It builds multiple decision trees during training and outputs the class that is the mode of the classes (classification) or mean prediction (regression) of the individual trees. Each tree in the random forest is trained on a random subset of the training data, and a random subset of features is considered for each split in the tree. This randomness helps to decorrelate the trees and reduce overfitting.
+
+During prediction, each tree in the forest independently predicts the class of the input data, and the final prediction is determined by aggregating the predictions of all the trees. In classification tasks, the class with the most votes among all the trees is assigned as the predicted class.
+
+Random forests are known for their robustness, scalability, and ability to handle high-dimensional data with many features. They are widely used in various domains, including finance, healthcare, and bioinformatics, for tasks such as fraud detection, disease diagnosis, and gene expression analysis.
 
 ```{r}
 set.seed(20201020)
@@ -537,7 +548,16 @@ rf_fit_rs <- rf_wf %>%
 
 ```
 
-Evaluate the models:
+### 5.2.4 Models' Performance 
+To evaluate the models' performance, we selected three metrcis:
+
+Precision: is the ratio of correctly predicted positive observations to the total predicted positives. It measures the accuracy of the positive predictions made by the model.
+
+Accuracy: is the ratio of correctly predicted observations to the total observations. It measures the overall correctness of the model's predictions.
+
+Recall (Sensitivity): is the ratio of correctly predicted positive observations to the total actual positives. It measures the ability of the model to find all the relevant cases within the data set.
+
+As in this research exercise we are interested in predicting when our outcome variable (attending to university) takes on a positive value, we believe that precision is the most relevant metric. 
 
 ```{r}
 #Collecing metrics
@@ -573,33 +593,16 @@ combined_metrics %>%
   theme_minimal()
 ```
 
-**Decision Tree Model**
+Both Probit and Random Forest models have an average precision performance of around .76, meaning that they accurately predict 76% of total positives observations. In terms of accuracy and recall, the Probit model does slightly better. However, because we are already familiar with Probit models for causal inference, for pedagogical reasons we choose to further investigate and test the Random Forest model. 
 
--   **Accuracy**: The Decision Tree model's accuracy exhibits some variability, particularly towards the lower end, but it generally remains good, consistently above 70%. Despite some fluctuations, it maintains a respectable level of correctness in its predictions across different evaluations.
+## 5.2.4.1. Variable importance in the random forest model
+Variable importance analysis is a method used to assess the contribution of each input variable (feature) to the model's predictive performance. It helps identify which variables have the most significant impact on the model's ability to make accurate predictions.
 
--   **Precision**: Precision of the Decision Tree model varies across evaluations, performing poorer than Random Forest but better than Probit on average. While it might not achieve the same level of precision as Random Forest, it still manages to provide relatively accurate positive predictions, albeit with some variability.
+In Random Forest models, variable importance is typically calculated based on the decrease in node impurity (e.g., Gini impurity or entropy) when a particular variable is used for splitting the data at each node of the trees in the forest. The importance of each variable is then averaged across all trees in the forest to obtain an overall measure of variable importance.
 
--   **Recall**: Decision Tree model demonstrates the highest recall compared to the other models, on average. It excels in capturing positive instances, even though its recall values might fluctuate significantly across different evaluations. Despite the variability, its average recall tends to be higher than both Random Forest and Probit, indicating its effectiveness in identifying relevant cases within the dataset.
+Variable importance analysis provides valuable insights into the relative importance of different features in the dataset. It can guide feature selection, feature engineering, and model interpretation efforts.
 
-**Random Forest Model**
-
--   **Accuracy**: The Random Forest model generally exhibits higher accuracy with less variability across different evaluations. This means it consistently provides accurate predictions across various datasets or subsets. It is above 70%.
-
--   **Precision**: Additionally, Random Forest tends to have higher precision compared to other models, indicating fewer false positives. Moreover, it shows less variability in precision outcomes across different folds or evaluations, suggesting more stable performance.
-
--   **Recall**: While Random Forest tends to have good overall performance, its recall might not be as high as some other models on average.
-
-**Probit Model**:
-
--   **Accuracy**: The Probit model demonstrates considerable variability in accuracy across different estimations. While in some cases, it may outperform both Random Forest and Decision Trees, in others, its accuracy can be significantly lower. This inconsistency suggests that the Probit model's performance is less stable in terms of overall correctness of predictions. It is around 70%.
-
--   **Precision**: Precision of the Probit model tends to exhibit high variability and is generally poorer on average compared to other models. This indicates that the Probit model might struggle to effectively minimize false positives, leading to a higher proportion of incorrect positive predictions compared to Random Forest and Decision Trees.
-
--   **Recall**: The Probit model's recall performance is not as strong as other models. It might fail to capture as many positive instances as Random Forest or Decision Trees, indicating limitations in its ability to identify all relevant cases within the dataset.
-
-In a nutshell, the Random Forest model performed better in all the pre-selected evaluation metrics. In the nex section, we test it against out testing data.
-
-## Variable importance in the random forest model
+Following some of the intuitions we acquired conducting the K-means and Decision Tree models, the most relevant variables within our Random Forest are age, income, formal job, hosehold members, and skin color. See the following figure for further detail. 
 
 ```{r}
 # Fit the random forest model
@@ -616,8 +619,10 @@ print(var_importance_plot)
 
 ```
 
-## 3. Implementation of a Random Forest
+## 5.2.1 Implementation of a Random Forest
+In this section we test our Random Forest model in our testing data set, to evaluate its prediction power for unknown observations. This step is particularly relevant to assess whether the model suffers from overfitting, meaning it is extermely good with the data it was train on (capturing every nuances), but lacks prediction power when applied to unknown data. 
 
+Our model has an accuracy rate of .74, meaning that it accurately predicts 74% of the total observed values (both positives and negatives). This is consistent with the performance statistics we obtained in section 5.2.4, and indicates the model does not overfit the data. 
 ```{r}
 # Preprocess the test dataset using the recipe
 test_processed <- rf_recipe %>%

@@ -31,37 +31,647 @@ Runfola D, Anderson A, Baier H, Crittenden M, Dowker E, Fuhrig S, et al. (2020) 
 
 ## 3. Data Wrangling
 
-## 4. Exploratory Analisis: higher education in South America
+**Read in Data**
 
-## 5. Data Analysis: using unsupervised machine learning to predict attending to college in Argentina
+```{r}
+lat_am_pop_2023 <- read_dta("Merge_2023_LAPOP_AmericasBarometer_v1.0_w.dta")
+
+Workingdata <- lat_am_pop_2023 %>% select(colorr, colori, etid, ocup4a, formal, cp13, cp8, r4a, smedia1n, q1tc_r, q2, q12cn, q10inc, edre, pais, ur, q14motan, prov)
+```
+
+**Data wrangling**
+
+In this section, we identify and clean our variables of interest, which can be grouped as it follows:
+
+[**1) Etnicity/ skin color identification**]{.underline}
+
+Colorr: contains individual skintone on a scale form 0 to 11 (categorical)
+
+Colori: interviewer skincolor
+
+Etid: self perceived ethnicity (categorical)
+
+[**2) Employment Status**]{.underline}
+
+Ocup4a: employment status (dummy)
+
+formal: formal job (dummy)
+
+[**3) Social Capital**]{.underline}
+
+cp13: political party meetings attendance (frequency of attendance, categorical)
+
+cp8: community meetings attendance (frequency of attendance, categorical)
+
+r4a: has a mobile phone (dummy)
+
+smedia1n: has social media (dummy)
+
+[**4) Demographic Data**]{.underline}
+
+q1tc_r: sex (make dummy)
+
+q2: age (continuous)
+
+q12cn: number of members in the household
+
+q10inc: income (Argentine pesos, categorical) (for Argentina)
+
+Edre: education attainment (all levels)
+
+pais : country (numeric)
+
+```{r}
+#creating dummy for work status where 1 is working and zero is not working 
+Workingdata <- Workingdata %>%
+  mutate(ocup4a = case_when(
+    ocup4a == 1 ~ 1,
+    ocup4a == 2 ~ 0,
+    ocup4a == 3 ~ 0,
+    ocup4a == 4 ~ 0,
+    ocup4a == 5 ~ 0,
+    ocup4a == 6 ~ 0,
+    ocup4a == 7 ~ 0,
+  ))
+
+#cleaning formal vs informal work 
+Workingdata <- Workingdata %>%
+  mutate(formal = case_when(
+    formal == 1 ~ 1,
+    formal == 2 ~ 0
+  ))
+
+#cleaning uses social media indicator variable
+Workingdata <- Workingdata %>%
+  mutate(smedia1n = case_when(
+    smedia1n == 1 ~ 1,
+    smedia1n == 2 ~ 0
+  ))
+
+#cleaning political involvement to be least to most 
+Workingdata <- Workingdata %>%
+  mutate(cp13 = case_when(
+    cp13 == 4 ~ 1,
+    cp13 == 3 ~ 2,
+    cp13 == 2 ~ 3,
+    cp13 == 1 ~ 4,
+  ))
+
+#cleaning community involvement to be least to most 
+Workingdata <- Workingdata %>%
+  mutate(cp8 = case_when(
+    cp8 == 4 ~ 1,
+    cp8 == 3 ~ 2,
+    cp8 == 2 ~ 3,
+    cp8 == 1 ~ 4,
+  ))
+
+#cleaning urban indicator variable
+Workingdata <- Workingdata %>%
+  mutate(ur = case_when(
+    ur == 1 ~ 1,
+    ur == 2 ~ 0
+  ))
+
+#making gender indicator variable where 0 = female, 1 = male
+Workingdata <- Workingdata %>%
+  mutate(q1tc_r = case_when(
+    q1tc_r == 1 ~ 1,
+    q1tc_r == 2 ~ 0,
+    q1tc_r == 3 ~ NA,
+  ))
+
+#cleaning ethnicity (note there is no etid6, etid7 is "other" so we will convert all the additional races as "other" for simplicity)
+#making black the max instead of mulata
+
+Workingdata <- Workingdata %>%
+  mutate(etid = case_when(
+    etid == 1 ~ 1, 
+    etid == 2 ~ 2, 
+    etid == 3 ~ 3, 
+    etid == 5 ~ 4, 
+    etid == 4 ~ 5, 
+    etid > 200 ~ 7,
+    etid == 7 ~ 7, 
+    TRUE ~ NA
+  ))
+
+#creating labels for ethnicity 
+ethnicity_labels <- c(
+  "White" = 1,
+  "Mestizo" = 2,
+  "Indigenous" = 3,
+   "Mulata" = 4, #note that this was orignially coded as 5 and Black as 4, they have been switched 
+   "Black" = 5,
+  "Other" = 7
+)
+
+#creating ethnicity codes 
+ethnicity_codes <- c(1, 2, 3, 4, 5, 7)
+
+#creating skin color palette
+skincolor <- c("#fff5f6", "#f5e2dc", "#e9c1b7", "#e7c9a5", "#c0a280", "#9d7c53", "#85674f", "#70503b", "#523c2f", "#422811", "#383127")
+
+
+#creating skin codes 
+skincodes <- c(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11)
+
+#creating a tibble of the color pallet and skin coding 
+skincolorpalette <- tibble(skincodes, skincolor)
+
+# create indicator variable for getting to university (includes partial and completion of university)
+Workingdata <- Workingdata %>%
+  mutate(university = case_when(
+    edre == 6 ~ 1,
+    edre == 5 ~ 1,
+    !(edre %in% c(5, 6)) ~ 0,
+    TRUE ~ NA
+  ))
+
+#creating a factor variable for getting into university  
+Workingdata <- Workingdata %>%
+  mutate(university_factor = factor(case_when(
+    edre == 6 ~ "University",
+    edre == 5 ~ "University", 
+    !(edre %in% c(5, 6)) ~ "Non-University", 
+    TRUE ~ NA_character_ 
+  )))
+
+#creating labels for education 
+educ_labels <- c(
+  "None" = 0,
+  "Primary School Incomplete" = 1,
+  "Primary School Complete" = 2,
+  "High-school Incomplete" = 3,
+  "High-school Complete" = 4,
+  "Tertiary/University Incomplete" = 5,
+  "Tertiary/University Complete" = 6
+)
+
+#cleaning Income for ARGENTINA ONLY 
+arg_income_codes <- c(1701, 1702, 1703, 1704, 1705, 1706, 1707, 1708, 1709, 1710, 1711, 1712, 1713, 1714, 1715)
+
+# Labels for ARGENITNA INCOME 
+arg_income_labels <- c("Between $0 and $14.000 pesos", "Between $14.001 and $26.000 pesos", "Between $26.001 and $39.000 pesos",
+            "Between $39.001 and $47.000 pesos", "Between $47.001 and $55.000 pesos", "Between $55.001 and $61.000 pesos",
+            "Between $61.001 and $68.000 pesos", "Between $68.001 and $81.000 pesos", "Between $81.001 and $88.000 pesos",
+            "Between $88.001 and $97.000 pesos", "Between $97.001 and $115.000 pesos", "Between $115.001 and $136.000 pesos",
+            "Between $136.001 and $168.000 pesos", "Between $168.001 and $221.000 pesos", "More than $221.000 pesos")
+
+# Assign labels FOR ARGENTINA INCOME 
+arg_income_values <- factor(arg_income_codes, levels = arg_income_codes, labels = arg_income_labels)
+
+#creating indicator variable for stating "Lack of educational opportunities" as reason for why they have considered emigrating 
+Workingdata <- Workingdata %>%
+  mutate(leave4educ = case_when(
+    q14motan == 3 ~ 1,
+    !(q14motan %in% 3) ~ 0,
+    TRUE ~ NA
+  ))
+
+#Adding country labels 
+Workingdata <- Workingdata %>% 
+  filter(pais < 39) %>% #getting rid of US and Canada from dataset 
+  mutate(country_name = factor(case_when(
+    pais == 1 ~ "Mexico",
+    pais == 2 ~ "Guatemala", 
+    pais == 3 ~ "El Salvador",
+    pais == 4 ~ "Honduras", 
+    pais == 5 ~ "Nicaragua",
+    pais == 6 ~ "Costa Rica", 
+    pais == 7 ~ "Panama",
+    pais == 8 ~ "Colombia", 
+    pais == 9 ~ "Ecuador",
+    pais == 10 ~ "Bolivia", 
+    pais == 11 ~ "Peru", 
+    pais == 12 ~ "Paraguay",
+    pais == 13 ~ "Chile", 
+    pais == 14 ~ "Uruguay",
+    pais == 15 ~ "Brazil", 
+    pais == 16 ~ "Venezuela",
+    pais == 17 ~ "Argentina", 
+    pais == 21 ~ "Dominican Republic", 
+    pais == 22 ~ "Haiti", 
+    pais == 23 ~ "Jamaica",
+    pais == 24 ~ "Guyana", 
+    pais == 25 ~ "Trinidad & Tobago",     
+    pais == 26 ~ "Belize",
+    pais == 27 ~ "Suriname", 
+    pais == 28 ~ "Bahamas", 
+    pais == 29 ~ "Barbados",
+    pais == 30 ~ "Grenada", 
+    pais == 31 ~ "Saint Lucia", 
+    pais == 32 ~ "Dominica", 
+    pais == 33 ~ "Antigua and Barbuda", 
+    pais == 34 ~ "Saint Vincent and the Grenadines", 
+    pais == 35 ~ "Saint Kitts and Nevis",
+    TRUE ~ NA_character_ 
+  ))) %>%
+  relocate(country_name, .after = pais) 
+
+Workingdata <- Workingdata %>%
+  rename(skin_color = colorr,
+         ethnicity = etid,
+         employed = ocup4a,
+         mobile = r4a, 
+         social_media = smedia1n,
+         male = q1tc_r,
+         age = q2, 
+         income = q10inc,
+         educ_attainment = edre,
+         political_involvement = cp13,
+         community_involvement=cp8, 
+         country_num = pais,
+         household_members = q12cn,
+         migrating4educ = q14motan)
+
+SouthAmerica_only <- Workingdata %>% 
+  filter(country_name == "Argentina" 
+         | country_name == "Uruguay" 
+         | country_name == "Chile" 
+         | country_name == "Paraguay" 
+         | country_name == "Bolivia" 
+         | country_name == "Peru" 
+         | country_name == "Ecuador" 
+         | country_name == "Brazil" 
+         | country_name == "Suriname" 
+         | country_name == "Guyana" 
+         | country_name == "French Guiana"  
+         | country_name == "Venezuela" 
+         | country_name == "Colombia")
+
+#Coding Argentine regions
+Workingdata <- Workingdata %>% 
+  filter(country_num == 17) %>% #getting rid of US and Canada from dataset 
+  mutate(prov = case_when(
+    prov == 1702 ~ 1, #"CABA"
+    prov == 1706 ~ 1, #"Buenos Aires"
+    prov == 1714 ~ 1, #"Córdoba"
+    prov == 1718 ~ 4, #"Corrientes"
+    prov == 1722 ~ 4, #"Chaco"
+    prov == 1730 ~ 1, #"Entre Ríos"
+    prov == 1742 ~ 1, #"La Pampa"
+    prov == 1750 ~ 3, #"Mendoza" 
+    prov == 1758 ~ 2, #"Neuquén"
+    prov == 1762 ~ 2, #"Río Negro" 
+    prov == 1766 ~ 5, #"Salta"
+    prov == 1770 ~ 3, #"San Juan"
+    prov == 1178 ~ 1, #"Santa Fe"
+    prov == 1786 ~ 5, #"Santiago del Estero"
+    prov == 1790 ~ 5, #"Tucumán"
+    TRUE ~ NA 
+  ))
+
+#1 = centro, 2 = patagonia, 3 = Cuyo, 4= NEA, 5= NOA
+```
+
+**Missing Values Assessment** We use Library missRanger for imputing missing values. The "ranger" package (Wright & Ziegler) is helpful to do fast missing value imputation by chained random forests, see Stekhoven & Buehlmann and Van Buuren & Groothuis-Oudshoorn. Between the iterative model fitting, it offers the option of predictive mean matching. This firstly avoids imputation with values not present in the original data (like a value 0.3334 in a 0-1 coded variable). Secondly, predictive mean matching tries to raise the variance in the resulting conditional distributions to a realistic level. This allows to do multiple imputation when repeating the call to missRanger().
+
+References 1. Wright, M. N. & Ziegler, A. (2016). ranger: A Fast Implementation of Random Forests for High Dimensional Data in C++ and R. Journal of Statistical Software, in press. \<arxiv.org/abs/1508.04409\>. 2. Stekhoven, D.J. and Buehlmann, P. (2012). ’MissForest - nonparametric missing value impu- tation for mixed-type data’, Bioinformatics, 28(1) 2012, 112-118. https://doi.org/10.1093/bioinformatics/btr597. 3. Van Buuren, S., Groothuis-Oudshoorn, K. (2011). mice: Multivariate Imputation by Chained Equations in R. Journal of Statistical Software, 45(3), 1-67. http://www.jstatsoft.org/v45/i03/
+
+```{r}
+missing_values <- sum(is.na(Workingdata))
+if (missing_values > 0) {
+  cat("There are", missing_values, "missing values in the dataset.\n")
+  # Handle missing values here (e.g., imputation or other preprocessing steps)
+} else {
+  cat("No missing values found in the dataset.\n")
+}
+
+#There are 122946 missing values in the dataset
+
+#Imputing missing values with MissRanger
+Workingdata <- missRanger(Workingdata, num.trees = 30, num.threads = 2)
+summary(Workingdata)
+
+#No Missing values found in the dataset
+```
+
+## 4. Exploratory Analysis: higher education in South America
+
+## 5. Data Analysis: using machine learning to predict attending to university in Argentina
+
+In this section, we conduct unsupervised and supervised machine learning to understand the determinants of achieving university level in Argentina. We chose Argentina because its higher education system is a *rara avis* in the region: the public university system is tuition free for everyone. Given this feature, we would expect the system to be more progressive than those of other South American countries.
+
+To conduct the following analysis, we selected only socioeconomic variables within our data set, and transformed our indicator variable for having attended university into a factor variable.
+
+## 5.1 Unsupervised Machine Learning
+
+```{r}
+Argentinadata <- Workingdata %>% filter(country_num==17) #Choosing Argentina
+
+Argentinadata <- Argentinadata %>%  select(-country_name, -country_num, -university_factor,-migrating4educ)
+
+```
+
+We conduct a cluster analysis searching for patterns within the data. We use a k-means model. The goal of k-means clustering is to partition a dataset into k distinct, non-overlapping clusters. To do so, the algorithm minimize the within-cluster variance, which is the sum of squared distances between each data point and its corresponding cluster centroid. The algorithm aims to find centroids that are centrally located within each cluster and to minimize the distance between data points and their assigned centroids.
+
+Once the algorithm converges, each data point belongs to the cluster with the nearest centroid. The resulting clusters are mutually exclusive and collectively exhaustive, meaning that each data point belongs to exactly one cluster, and all data points are assigned to a cluster.
+
+```{r}
+set.seed(20201020)
+num_clusters <- 4
+
+# Fit the k-means clustering model
+kmeans_model <- kmeans(Argentinadata, centers = num_clusters, nstart = 100)
+
+# Print the kmeans_model object
+kmeans_model
+
+# Retrieve cluster centers
+cluster_centers <- kmeans_model$centers
+
+# Assign cluster labels to each observation
+cluster_labels <- kmeans_model$cluster
+
+# Add cluster labels to the original data
+Argentinadata_with_clusters <- cbind(Argentinadata, Cluster = cluster_labels)
+
+tidy(kmeans_model) %>%
+  knitr::kable(digits = 2)
+
+# Plot the clusters
+plot(Argentinadata_with_clusters[, c("age", "income")], 
+     col = cluster_labels, pch = 19, main = "K-means Clustering", 
+     xlab = "Age", ylab = "Income")
+
+```
+
+K-means clustered the data into four groups according to their particular characteristics. Age seem to have the most clustering power. The model created four well-defined groups, organized around the means of 21, 33, 49 and 68, respectively. The following table presents the four groups and their means for each variable we use. In the subsequent diagram, we can observe no cluster variation across income categories.
+
+Using our cluster analysis, we now turn to Principal Component Analysis (PCA), a dimensionality reduction technique used to simplify the complexity of high-dimensional data while preserving most of its important structure. PCA identifies the directions (principal components) that capture the maximum variance in the data and projects the data onto these new orthogonal axes, thereby reducing overall data dimensionality.
+
+In this case, PCA built upon the previously conducted k-means, meaning it kept the four clusters. In the following diagram, we can observe the distribution of the clusters along the 2 PCs. It's difficult to distinguish the variables that the PCs are reflecting. However, given that k-means built the clusters around age, we can guess that PC2 is reflecting a mix of age and other variables. The distribution across PC1 is also hard to see, but there is a clear pattern: clusters 1 and 2 are organized around two different lines with negatives slopes, whereas clusters 3 and 4 don't present a well-defined distribution.
+
+```{r}
+# Perform PCA analysis
+pca_result <- PCA(Argentinadata, graph = FALSE)
+
+# Plot the PCA results
+pca_with_clusters <- cbind(as.data.frame(pca_result$ind$coord), Cluster = cluster_labels)
+
+# Plot PCA results with cluster labels
+ggplot(pca_with_clusters, aes(x = Dim.1, y = Dim.2, color = factor(Cluster))) +
+  geom_point() +
+  labs(title = "PCA with K-means Clustering", x = "PC1", y = "PC2", color = "Cluster") +
+  theme_minimal()
+```
+
+## 5.2 Supervised Machine Learning
+
+In this section we use three different machine learning techniques to predict whether a person will make it to university or not. We then compare them according to the pre-selected error metric and pick the best to test it against our testing dataset. Finally, we conduct a variance importance analysis to unveil the weights of each variable in the prediction decision.
+
+```{r}
+Argentinadata <- Workingdata %>% filter(country_num==17) #Choosing Argentina
+
+Argentinadata <- Argentinadata %>% select(skin_color, ethnicity, employed, formal, political_involvement, community_involvement, mobile, social_media, male, age, household_members, income, university_factor)
+
+#Splitting the data
+set.seed(20201020)
+# create a split object
+educ_split <- initial_split(data = Argentinadata, prop = 0.75)
+# create the training and testing data
+workingdata_train <- training(x = educ_split)
+workingdata_test <- testing(x = educ_split)
+```
+
+### 5.2.1. Probit Classification model
+
+Building a **probit classification model** with embedded regularization to quantify likelihood of making it to college based on our pre-defined predictors. A probit model for classification, also known as a probit regression model, is a statistical model used to predict the probability that an observation belongs to a particular category or class. It is commonly employed in binary classification tasks, where the outcome variable is binary. In our case, our outcome variable takes on two values: 0 for "non-university", and 1 for "university".
+
+In a probit classification model, the relationship between the predictors (independent variables) and the binary outcome variable is modeled using the cumulative distribution function (CDF) of the standard normal distribution, also known as the probit function. This function transforms a linear combination of the predictor variables into a probability, which represents the probability of the outcome belonging to one of the categories.
+
+```{r}
+set.seed(20201020)
+
+# Create a recipe
+probit_recipe <- recipe(formula = university_factor ~ ., data = workingdata_train) %>%
+    step_normalize(all_numeric_predictors()) %>%
+    step_nzv(all_numeric_predictors())
+             
+# Set Probit Model
+probit_model <- logistic_reg() %>%
+  set_engine("glm", family = binomial(link = "probit"))
+
+# Probit Workflow and recipe
+probit_wf <- workflow() %>%
+  add_model(probit_model) %>%
+  add_recipe(probit_recipe)
+
+# Set folds for cross-validation
+folds <- vfold_cv(data = workingdata_train, v = 10)
+
+# Fitting probit model using v-fold resampling method
+probit_fit_rs <- probit_wf %>%
+  fit_resamples(
+    resamples = folds,
+    control = control_resamples(save_pred = TRUE, save_workflow = TRUE),
+    metrics = metric_set(accuracy, precision, recall)
+  )
+```
+
+### 5.2.2. Decision Tree
+
+Building a **decision tree** to quantify likelihood of making it to college based on our pre-defined predictors. A decision tree for classification is a predictive modeling algorithm used for solving classification problems, where the goal is to assign input data points to one of two or more predefined classes or categories.
+
+Decision trees recursively partition the feature space into subsets, making decisions based on the values of input features. For this model, we conducted hyperparameter tunning, creating a combination of different trees with the folowwing features: i) we restricted the minimum number per node to 2, 5, 10, and 15; ii) we restricted the maximum depth of the trees to 3, 4, and 5. Then, the algortihm chooses the "best tree", taking into account the relevant metrics we are interested in, precision (see the Models Performance section for more information on this).
+
+Our best tree has 7 layers and 10 nodes. In a nuthsell, our decision tree shows that people with a high probability of going to university share some common features: they have mostly formal jobs, are mostly males, and with incomes higher than \$97,000 monthly pesos. See the following image for a detailed assessment of each node's probabilities.
+
+```{r}
+set.seed(20201020)
+
+# Create the recipe object 
+tree_recipe <- recipe(formula = university_factor ~ ., data = workingdata_train) %>%
+  step_normalize(all_numeric_predictors()) %>%
+  step_nzv(all_numeric_predictors()) %>%
+  step_impute_median(all_numeric_predictors()) %>%
+  step_impute_mode(all_nominal_predictors()) 
+
+# Define the parameter grid
+param_grid <- expand.grid(
+  min_n = c(2, 5, 10, 15),   
+  max_depth = c(3, 5, 7)
+)
+
+# Create a cart model object
+lapop_tree <- 
+  decision_tree() %>%
+  set_engine("rpart", model = TRUE) %>%
+  set_mode("classification")  
+
+# Create a workflow
+tree_wf <- workflow() %>%
+  add_recipe(tree_recipe) %>%
+  add_model(lapop_tree) 
+
+# Tune the model
+tree_tune <- tree_wf %>%
+  tune_grid(
+    resamples = folds,
+    grid = param_grid,
+    control = control_grid(verbose = TRUE),
+    metrics = metric_set(accuracy, precision, recall)
+  )
+
+# Extract the best tuning parameters
+best_params <- tree_tune %>%
+  select_best(metric = "precision")
+
+# Create a new tree model with the best parameters
+best_tree_model <- lapop_tree %>%
+  set_engine("rpart", model = TRUE) %>%
+  set_mode("classification") %>%
+  finalize_model(best_params)
+
+# Fit the tuned model
+best_tree_fit <- best_tree_model %>%
+  fit(data = workingdata_train, formula = university_factor ~ .)
+
+# create a tree
+rpart.plot::rpart.plot(x = best_tree_fit$fit)
+
+```
+
+### 5.2.3. Random Forest Classification model
+
+Building a **random forest** to quantify likelihood of making it to college based on our pre-defined predictors. A random forest for classification is an ensemble learning method used for classification tasks. It builds multiple decision trees during training and outputs the class that is the mode of the classes (classification) or mean prediction (regression) of the individual trees. Each tree in the random forest is trained on a random subset of the training data, and a random subset of features is considered for each split in the tree. This randomness helps to decorrelate the trees and reduce overfitting.
+
+During prediction, each tree in the forest independently predicts the class of the input data, and the final prediction is determined by aggregating the predictions of all the trees. In classification tasks, the class with the most votes among all the trees is assigned as the predicted class.
+
+Random forests are known for their robustness, scalability, and ability to handle high-dimensional data with many features. They are widely used in various domains, including finance, healthcare, and bioinformatics, for tasks such as fraud detection, disease diagnosis, and gene expression analysis.
+
+```{r}
+set.seed(20201020)
+
+# Create the recipe object and impute missing values
+rf_recipe <- recipe(formula = university_factor ~ ., data = workingdata_train) %>%
+  step_normalize(all_numeric_predictors()) %>%
+  step_nzv(all_numeric_predictors()) %>%
+  step_impute_median(all_numeric_predictors()) %>%
+  step_impute_mode(all_nominal_predictors())
+
+# Create a random forest model object
+lapop_rf <- 
+  rand_forest() %>%
+  set_engine("ranger") %>%
+  set_mode("classification")
+
+# Create a workflow
+rf_wf <- workflow() %>%
+  add_recipe(rf_recipe) %>%
+  add_model(lapop_rf)
+
+# Fit the model
+rf_fit_rs <- rf_wf %>%
+  fit_resamples(
+    resamples = folds,
+    control = control_resamples(save_pred = TRUE, save_workflow = TRUE),
+    metrics = metric_set(precision, accuracy, recall)
+  )
+
+```
+
+### 5.2.4 Models' Performance
+
+To evaluate the models' performance, we selected three metrcis:
+
+Precision: is the ratio of correctly predicted positive observations to the total predicted positives. It measures the accuracy of the positive predictions made by the model.
+
+Accuracy: is the ratio of correctly predicted observations to the total observations. It measures the overall correctness of the model's predictions.
+
+Recall (Sensitivity): is the ratio of correctly predicted positive observations to the total actual positives. It measures the ability of the model to find all the relevant cases within the data set.
+
+As in this research exercise we are interested in predicting when our outcome variable (attending to university) takes on a positive value, we believe that precision is the most relevant metric.
+
+```{r}
+#Collecing metrics
+probit_metrics <- collect_metrics(probit_fit_rs, summarize = FALSE)
+tree_metrics <- collect_metrics(tree_tune, summarize = FALSE)
+rf_metrics <- collect_metrics(rf_fit_rs, summarize = FALSE)
+
+# Add a column to indicate the model for each metrics dataframe
+probit_metrics$model <- "Probit"
+tree_metrics$model <- "Decision Tree"
+rf_metrics$model <- "Random Forest"
+
+# Combine the model metrics into one data frame
+combined_metrics <- bind_rows(probit_metrics, tree_metrics, rf_metrics)
+
+#Evaluate
+combined_metrics %>%
+  group_by(model, .metric) %>%
+  mutate(modelmean = mean(.estimate)) %>%
+  ungroup() %>%
+  ggplot(aes(x = model, color = .metric)) + 
+  geom_jitter(aes(y = .estimate), 
+              position = position_dodge(width = 0.5), 
+              alpha = 0.65, 
+              size = 2) +
+  geom_point(aes(y = modelmean), 
+             shape = 95, 
+             position = position_dodge(width = 0.5), 
+             size = 10) +
+  labs(x = "Model", 
+       y = "Metric", 
+       title = "Model performance") +
+  theme_minimal()
+```
+
+Both Probit and Random Forest models have an average precision performance of around .76, meaning that they accurately predict 76% of total positives observations. In terms of accuracy and recall, the Probit model does slightly better. However, because we are already familiar with Probit models for causal inference, for pedagogical reasons we choose to further investigate and test the Random Forest model.
+
+## 5.2.4.1. Variable importance in the random forest model
+
+Variable importance analysis is a method used to assess the contribution of each input variable (feature) to the model's predictive performance. It helps identify which variables have the most significant impact on the model's ability to make accurate predictions.
+
+In Random Forest models, variable importance is typically calculated based on the decrease in node impurity (e.g., Gini impurity or entropy) when a particular variable is used for splitting the data at each node of the trees in the forest. The importance of each variable is then averaged across all trees in the forest to obtain an overall measure of variable importance.
+
+Variable importance analysis provides valuable insights into the relative importance of different features in the dataset. It can guide feature selection, feature engineering, and model interpretation efforts.
+
+Following some of the intuitions we acquired conducting the K-means and Decision Tree models, the most relevant variables within our Random Forest are age, income, formal job, hosehold members, and skin color. See the following figure for further detail.
+
+```{r}
+# Fit the random forest model
+library(randomForest)
+
+rf_model <- randomForest(formula = university_factor ~ ., data = workingdata_train, ntree = 500)
+
+# Calculate variable importance
+var_importance <- importance(rf_model)
+
+# Plot variable importance
+var_importance_plot <- varImpPlot(rf_model, main = "Variable Importance - Random Forest")
+print(var_importance_plot)
+
+```
+
+## 5.2.1 Implementation of a Random Forest
+
+In this section we test our Random Forest model in our testing data set, to evaluate its prediction power for unknown observations. This step is particularly relevant to assess whether the model suffers from overfitting, meaning it is extermely good with the data it was train on (capturing every nuances), but lacks prediction power when applied to unknown data.
+
+Our model has an accuracy rate of .74, meaning that it accurately predicts 74% of the total observed values (both positives and negatives). This is consistent with the performance statistics we obtained in section 5.2.4, and indicates the model does not overfit the data.
+
+```{r}
+# Preprocess the test dataset using the recipe
+test_processed <- rf_recipe %>%
+  prep() %>%
+  bake(new_data = workingdata_test)
+
+# Fit the model and select the best tuning configuration
+rf_fit_best <- rf_fit_rs %>%
+  fit_best()
+
+# Predict using the best model configuration
+test_predictions <- rf_fit_best %>%
+  predict(new_data = workingdata_test) %>%
+  bind_cols(workingdata_test)
+
+# Evaluate the model's performance on the test dataset
+test_metrics <- test_predictions %>%
+  metrics(truth = university_factor, estimate = .pred_class)
+
+# View the test metrics
+print(test_metrics)
+```
 
 ## 6. Discussion of Results
-
-### Feedback
-
--   need municipal level polygons/ geographic data for south america
--   what kind of cleaning can we do for multicoliniarity?
--   what kind of methodology can we use with time/year data?
--   find another dataset that complements the data that you found
--   where people live and how far is the neighborhood to each school
--   start with bigger picture custom functions in purr and pass each name of country + look at relative feature importance
-
-### Data visualization
-
-n order to do this we are first going to model the relationship between highest level of education achieved and skin tone within each country uniquely. What is interesting is that (as you can see in the figure below) there are two categorizations for skin tone: both ethnoracial category (6 options) as well as a purely skin tone based groupings (11 options). We will test both variables to see which is more strongly related to educational outcomes. We are interested in potentially using PCA methodologies to combine the effects. While doing state level data, we would control for urban/rural, gender, age and other factors that impact educational outcomes.
-
-### geospatial analysis
-
-This requires going in depth on each method you choose to demonstrate in your project (aka if you’re going to choose geospatial analysis as one of your methods, I’d want to see you go beyond mapping).
-
-### supervised machine learning
-
--   don't use model for education but rather look into how the model is using race/ethnicity 3 models: y = education data frame with ethnicity data frame with skin tone data frame without either variable and see how it affects precision and accuracy?
-
-## • unsupervised machine learning
-
-I’d suggest you think about how to use the methods from the course to explore the topic.
-
-You could use supervised machine learning to predict educational outcomes using skin tone and other variables. You could then examine the model feature importance to assess the predictive value of skin tone.
-
-However, this is not the same as assessing the effect of skin tone on educational outcomes (that’s the difference between a causal inference framework and a prediction framework). I could also see the use of cluster analysis to create groupings based on educational outcomes, skin tone, and other variables across countries. For the between-country analysis, I think you could do some extensive data visualization to explore those outcomes. You could also do a deep-dive on a couple countries of interest to use geospatial analysis to look at subnational patterns. You could also bring in different types of country specific data (e.g. the locations of schools) to enable different types of geospatial analysis.
